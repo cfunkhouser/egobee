@@ -61,3 +61,32 @@ func TestMarshalTokenDuration(t *testing.T) {
 		}
 	}
 }
+
+// TestUnmarshalTokenRefreshResponse tests that the example JSON provided on the
+// ecobee API documentation page is properly unmarshalled.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/auth/token-refresh.shtml
+func TestUnmarshalTokenRefreshResponse(t *testing.T) {
+	// This JSON has stray whitespace which is preserved from the source docs.
+	exampleJSON := `{
+    "access_token": "Rc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
+    "token_type": "Bearer",
+    "expires_in": 3599,
+    "refresh_token": "og2Obost3ucRo1ofo0EDoslGltmFMe2g",
+    "scope": "smartWrite" 
+}                `
+	want := &TokenRefreshResponse{
+		AccessToken:  "Rc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "og2Obost3ucRo1ofo0EDoslGltmFMe2g",
+		Scope:        ScopeSmartWrite,
+	}
+
+	got := &TokenRefreshResponse{}
+	if err := json.Unmarshal([]byte(exampleJSON), got); err != nil {
+		t.Errorf("unmarshal sample json: got unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("unmarshal sample json: got: %+v, wanted: %+v", got, want)
+	}
+}

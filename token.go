@@ -61,6 +61,8 @@ func (d *TokenDuration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// TokenRefreshResponse is returned by the ecobee API on toke refresh.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/auth/token-refresh.shtml
 type TokenRefreshResponse struct {
 	AccessToken  string        `json:"access_token"`
 	TokenType    string        `json:"token_type"`
