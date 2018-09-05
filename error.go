@@ -1,5 +1,9 @@
 package egobee
 
+import (
+	"encoding/json"
+)
+
 // APIError returned by ecobee.
 type APIError string
 
@@ -25,4 +29,18 @@ type ErrorResponse struct {
 	Error       APIError `json:"error"`
 	Description string   `json:"error_description"`
 	URI         string   `json:"error_uri"`
+}
+
+// Parse a response payload into the receiving ErrorResponse. This will
+// naturally fail if the payload is not an ErrorResponse.
+func (r *ErrorResponse) Parse(payload []byte) error {
+	if err := json.Unmarshal(payload, r); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseString behaves the same as Parse, but on a string.
+func (r *ErrorResponse) ParseString(payload string) error {
+	return r.Parse([]byte(payload))
 }

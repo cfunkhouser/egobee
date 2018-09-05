@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -69,4 +70,51 @@ type TokenRefreshResponse struct {
 	ExpiresIn    TokenDuration `json:"expires_in"`
 	RefreshToken string        `json:"refresh_token"`
 	Scope        Scope         `json:"scope"`
+}
+
+// TokenStore for ecobee Access and Refresh tokens.
+type TokenStore interface {
+	// AccessToken gets the access token from the store.
+	AccessToken() string
+
+	// RefreshToken gets the refresh token from the store.
+	RefreshToken() string
+
+	// ValidFor reports how much longer the access token is valid.
+	ValidFor() time.Duration
+}
+
+// memoryStore implements tokenStore backed only by memory.
+type memoryStore struct {
+	mu           sync.RWMutex // protects the following members
+	accessToken  string
+	refreshToken string
+	validUntil   time.Time
+}
+
+func (s *memoryStore) AccessToken() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.accessToken
+}
+
+func (s *memoryStore) RefreshToken() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.refreshToken
+}
+
+func (s *memoryStore) ValidFor() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return time.Now().Sub(s.validUntil)
+}
+
+// NewMemoryTokenStore is a TokenStore with no persistence.
+func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStore {
+	return &memoryStore{
+		accessToken:  r.AccessToken,
+		refreshToken: r.RefreshToken,
+		validUntil:   time.Now().Add(r.ExpiresIn.Duration),
+	}
 }
