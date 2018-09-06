@@ -22,6 +22,10 @@ func (s *fakeTokenStore) ValidFor() time.Duration {
 	return time.Minute * 30
 }
 
+func (s *fakeTokenStore) Update(r *TokenRefreshResponse) {
+	return
+}
+
 func TestAuthorizingTransport(t *testing.T) {
 	clientForTest := http.Client{
 		Transport: &authorizingTransport{

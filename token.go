@@ -123,6 +123,10 @@ type TokenStore interface {
 
 	// ValidFor reports how much longer the access token is valid.
 	ValidFor() time.Duration
+
+	// Update the TokenStore with the contents of the response. This mutates the
+	// access and refresh tokens.
+	Update(*TokenRefreshResponse)
 }
 
 // memoryStore implements tokenStore backed only by memory.
@@ -151,11 +155,18 @@ func (s *memoryStore) ValidFor() time.Duration {
 	return time.Now().Sub(s.validUntil)
 }
 
+func (s *memoryStore) Update(r *TokenRefreshResponse) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessToken = r.AccessToken
+	s.refreshToken = r.RefreshToken
+	// Subtract a few seconds to allow for network and processing delays.
+	s.validUntil = time.Now().Add(r.ExpiresIn.Duration - (15 * time.Second))
+}
+
 // NewMemoryTokenStore is a TokenStore with no persistence.
 func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStore {
-	return &memoryStore{
-		accessToken:  r.AccessToken,
-		refreshToken: r.RefreshToken,
-		validUntil:   time.Now().Add(r.ExpiresIn.Duration),
-	}
+	s := &memoryStore{}
+	s.Update(r)
+	return s
 }
