@@ -156,3 +156,29 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 		t.Errorf("got: %+v, wanted: %+v", got, want)
 	}
 }
+
+func TestNewPersistentTokenStore(t *testing.T) {
+	// This JSON has stray whitespace which is preserved from the source docs.
+	tokenRefreshResponse := &TokenRefreshResponse{
+		AccessToken:  "Rc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "og2Obost3ucRo1ofo0EDoslGltmFMe2g",
+		Scope:        ScopeSmartWrite,
+	}
+
+	tokenStore, err := NewPersistentTokenStore(tokenRefreshResponse)
+	if err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+
+	if tokenStore.AccessToken() != tokenRefreshResponse.AccessToken {
+		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
+	}
+
+	if tokenStore.RefreshToken() != tokenRefreshResponse.RefreshToken {
+		t.Errorf("refresh tokens do not match: %v vs. %v", tokenStore.RefreshToken(), tokenRefreshResponse.RefreshToken)
+	}
+
+
+}

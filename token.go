@@ -3,7 +3,11 @@ package egobee
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -143,10 +147,28 @@ func (s *memoryStore) AccessToken() string {
 	return s.accessToken
 }
 
+func AccessToken() (string, error) {
+	s, err := getPersistentTokenData()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(s, ":")[0], err
+}
+
 func (s *memoryStore) RefreshToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.refreshToken
+}
+
+func RefreshToken() (string, error) {
+	s, err := getPersistentTokenData()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(s, ":")[1], err
 }
 
 func (s *memoryStore) ValidFor() time.Duration {
@@ -155,13 +177,41 @@ func (s *memoryStore) ValidFor() time.Duration {
 	return time.Now().Sub(s.validUntil)
 }
 
+func ValidFor() (time.Duration, error) {
+	s, err := getPersistentTokenData()
+	if err != nil {
+		return 0, err
+	}
+	
+	validUntil, err := time.Parse(time.RFC3339, strings.Split(s, ":")[2]) 
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Now().Sub(validUntil), err
+}
+
 func (s *memoryStore) Update(r *TokenRefreshResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accessToken = r.AccessToken
 	s.refreshToken = r.RefreshToken
-	// Subtract a few seconds to allow for network and processing delays.
-	s.validUntil = time.Now().Add(r.ExpiresIn.Duration - (15 * time.Second))
+	s.validUntil = generateValidUntil(r)
+}
+
+func Update(r *TokenRefreshResponse) error {
+	s, err := os.Create("/tmp/memoryStore")
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	data := fmt.Sprintf("%s:%s:%s", r.AccessToken, r.RefreshToken, generateValidUntil(r))
+
+	// Write token data to file to be accessed later
+	s.WriteString(data)
+
+	return nil
 }
 
 // NewMemoryTokenStore is a TokenStore with no persistence.
@@ -170,3 +220,32 @@ func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStore {
 	s.Update(r)
 	return s
 }
+
+func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStore, error) {
+	s := &memoryStore{}
+	// update persistent storage
+	if err := Update(r); err != nil {
+		return nil, err
+	}
+	// update local memory storage
+	s.Update(r)
+	return s, nil
+}
+
+// generateValidUntil returns the time the token expires with an added buffer
+func generateValidUntil(r *TokenRefreshResponse) time.Time {
+	// Subtract a few seconds to allow for network and processing delays.
+	return time.Now().Add(r.ExpiresIn.Duration - (15 * time.Second))
+}
+
+// getPersistentTokenData returns the token data stored in a local file
+func getPersistentTokenData() (string, error) {
+	buf, err := ioutil.ReadFile("/tmp/memoryStore")
+	if err != nil {
+		return "", err
+	}
+	s := string(buf)
+
+	return s, err
+}
+
