@@ -62,6 +62,47 @@ func (d *TokenDuration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// AuthorizationError returned by ecobee.
+type AuthorizationError string
+
+// Possible API Errors
+var (
+	AuthorizationErrorAccessDenied         AuthorizationError = "access_denied"
+	AuthorizationErrorInvalidRequest       AuthorizationError = "invalid_request"
+	AuthorizationErrorInvalidClient        AuthorizationError = "invalid_client"
+	AuthorizationErrorInvalidGrant         AuthorizationError = "invalid_grant"
+	AuthorizationErrorUnauthorizeClient    AuthorizationError = "unauthorized_client"
+	AuthorizationErrorUnsupportedGrantType AuthorizationError = "unsupported_grant_type"
+	AuthorizationErrorInvalidScope         AuthorizationError = "invalid_scope"
+	AuthorizationErrorNotSupported         AuthorizationError = "not_supported"
+	AuthorizationErrorAccountLocked        AuthorizationError = "account_locked"
+	AuthorizationErrorAccountDisabled      AuthorizationError = "account_disabled"
+	AuthorizationErrorAuthorizationPending AuthorizationError = "authorization_pending"
+	AuthorizationErrorAuthorizationExpired AuthorizationError = "authorization_expired"
+	AuthorizationErrorSlowDown             AuthorizationError = "slow_down"
+)
+
+// AuthorizationErrorResponse as returned from the ecobee API.
+type AuthorizationErrorResponse struct {
+	Error       AuthorizationError `json:"error"`
+	Description string             `json:"error_description"`
+	URI         string             `json:"error_uri"`
+}
+
+// Parse a response payload into the receiving AuthorizationErrorResponse. This will
+// naturally fail if the payload is not an AuthorizationErrorResponse.
+func (r *AuthorizationErrorResponse) Parse(payload []byte) error {
+	if err := json.Unmarshal(payload, r); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseString behaves the same as Parse, but on a string.
+func (r *AuthorizationErrorResponse) ParseString(payload string) error {
+	return r.Parse([]byte(payload))
+}
+
 // TokenRefreshResponse is returned by the ecobee API on toke refresh.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/auth/token-refresh.shtml
 type TokenRefreshResponse struct {
