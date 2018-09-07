@@ -3,6 +3,7 @@ package egobee
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"regexp"
 	"sync"
 	"time"
@@ -103,6 +104,12 @@ func (r *AuthorizationErrorResponse) ParseString(payload string) error {
 	return r.Parse([]byte(payload))
 }
 
+// Populate behaves the same as Parse, but reads the content from an io.Reader.
+func (r *AuthorizationErrorResponse) Populate(reader io.Reader) error {
+	d := json.NewDecoder(reader)
+	return d.Decode(r)
+}
+
 // TokenRefreshResponse is returned by the ecobee API on toke refresh.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/auth/token-refresh.shtml
 type TokenRefreshResponse struct {
@@ -111,6 +118,26 @@ type TokenRefreshResponse struct {
 	ExpiresIn    TokenDuration `json:"expires_in"`
 	RefreshToken string        `json:"refresh_token"`
 	Scope        Scope         `json:"scope"`
+}
+
+// Parse a response payload into the receiving TokenRefreshResponse. This will
+// naturally fail if the payload is not an TokenRefreshResponse.
+func (r *TokenRefreshResponse) Parse(payload []byte) error {
+	if err := json.Unmarshal(payload, r); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ParseString behaves the same as Parse, but on a string.
+func (r *TokenRefreshResponse) ParseString(payload string) error {
+	return r.Parse([]byte(payload))
+}
+
+// Populate behaves the same as Parse, but reads the content from an io.Reader.
+func (r *TokenRefreshResponse) Populate(reader io.Reader) error {
+	d := json.NewDecoder(reader)
+	return d.Decode(r)
 }
 
 // TokenStore for ecobee Access and Refresh tokens.

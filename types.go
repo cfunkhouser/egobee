@@ -362,6 +362,60 @@ type SecuritySettings struct {
 	VacationAccess  bool   `json:"vacationAccess"`
 }
 
+// SelectionType defines the type of selection to perform.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/objects/Selection.shtml.
+type SelectionType string
+
+var (
+	// SelectionTypeRegistered returns Thermostats registered to the current user
+	// Only usable with Smart thermostats, does not work on EMS thermostats and
+	// may not be used by a Utility who is not the owner of thermostats.
+	SelectionTypeRegistered SelectionType = "registered"
+
+	// SelectionTypeThermostats selects only those thermostats listed in the CSV
+	// SelectionMatch. No spaces in the CSV string. There is a limit of 25
+	// identifiers per request.
+	SelectionTypeThermostats SelectionType = "thermostats"
+
+	// SelectionTypeManagementSet selects all thermostats for a given management
+	// set defined by the Management/Utility account. This is only available to
+	// Management/Utility accounts.
+	SelectionTypeManagementSet SelectionType = "managementSet"
+)
+
+// Selection defines the resources and information to return as part of a
+// response. It is required in all requests, but some selection fields are only
+// meaningful in certain request types.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/objects/Selection.shtml
+type Selection struct {
+	SelectionType               SelectionType `json:"selectionType"`
+	SelectionMatch              string        `json:"selectionMatch"`
+	IncludeRuntime              bool          `json:"includeRuntime"`
+	IncludeExtendedRuntime      bool          `json:"includeExtendedRuntime"`
+	IncludeElectricity          bool          `json:"includeElectricity"`
+	IncludeSettings             bool          `json:"includeSettings"`
+	IncludeLocation             bool          `json:"includeLocation"`
+	IncludeProgram              bool          `json:"includeProgram"`
+	IncludeEvents               bool          `json:"includeEvents"`
+	IncludeDevice               bool          `json:"includeDevice"`
+	IncludeTechnician           bool          `json:"includeTechnician"`
+	IncludeUtility              bool          `json:"includeUtility"`
+	IncludeManagement           bool          `json:"includeManagement"`
+	IncludeAlerts               bool          `json:"includeAlerts"`
+	IncludeReminders            bool          `json:"includeReminders"`
+	IncludeWeather              bool          `json:"includeWeather"`
+	IncludeHouseDetails         bool          `json:"includeHouseDetails"`
+	IncludeOemCfg               bool          `json:"includeOemCfg"`
+	IncludeEquipmentStatus      bool          `json:"includeEquipmentStatus"`
+	IncludeNotificationSettings bool          `json:"includeNotificationSettings"`
+	IncludePrivacy              bool          `json:"includePrivacy"`
+	IncludeVersion              bool          `json:"includeVersion"`
+	IncludeSecuritySettings     bool          `json:"includeSecuritySettings"`
+	IncludeSensors              bool          `json:"includeSensors"`
+	IncludeAudio                bool          `json:"includeAudio"`
+	IncludeEnergy               bool          `json:"includeEnergy"`
+}
+
 // Sensor represents a sensor connected to the thermostat. Sensors may not be
 // modified using the API, however some configuration may occur through the web
 // portal.
