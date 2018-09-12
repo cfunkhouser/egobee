@@ -4,18 +4,23 @@ package egobee
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 )
 
 // authorizingTransport is a RoundTripper which includes the Access token in the
 // request headers as appropriate for accessing the ecobee API.
 type authorizingTransport struct {
-	auth      TokenStore
+	auth      TokenStorer
 	transport http.RoundTripper
 }
 
 func (t *authorizingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %v", t.auth.AccessToken()))
+	accessToken, err := t.auth.GetAccessToken()
+	if err != nil {
+		log.Fatalf("Unable to get accessToken for request: %v", err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %v", accessToken))
 	return t.transport.RoundTrip(req)
 }
 
@@ -25,7 +30,7 @@ type Client struct {
 }
 
 // New egobee client.
-func New(ts TokenStore) *Client {
+func New(ts TokenStorer) *Client {
 	return &Client{
 		Client: http.Client{
 			Transport: &authorizingTransport{

@@ -7,29 +7,29 @@ import (
 	"time"
 )
 
-type fakeTokenStore struct {
+type fakeTokenStorer struct {
 }
 
-func (s *fakeTokenStore) AccessToken() string {
-	return "thisisanaccesstoken"
+func (s *fakeTokenStorer) GetAccessToken() (string, error) {
+	return "thisisanaccesstoken", nil
 }
 
-func (s *fakeTokenStore) RefreshToken() string {
-	return "thisisarefreshtoken"
+func (s *fakeTokenStorer) GetRefreshToken() (string, error) {
+	return "thisisarefreshtoken", nil
 }
 
-func (s *fakeTokenStore) ValidFor() time.Duration {
-	return time.Minute * 30
+func (s *fakeTokenStorer) GetValidFor() (time.Duration, error) {
+	return time.Minute * 30, nil
 }
 
-func (s *fakeTokenStore) Update(r *TokenRefreshResponse) {
-	return
+func (s *fakeTokenStorer) Update(r *TokenRefreshResponse) error {
+	return nil
 }
 
 func TestAuthorizingTransport(t *testing.T) {
 	clientForTest := http.Client{
 		Transport: &authorizingTransport{
-			auth:      &fakeTokenStore{},
+			auth:      &fakeTokenStorer{},
 			transport: http.DefaultTransport,
 		},
 	}

@@ -172,13 +172,20 @@ func TestNewPersistentTokenStore(t *testing.T) {
 		t.Errorf("got unexpected error: %v", err)
 	}
 
-	if tokenStore.AccessToken() != tokenRefreshResponse.AccessToken {
-		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
+	accessToken, err := tokenStore.GetAccessToken()
+	if err != nil {
+		t.Errorf("Error getting access token: %v", err)
+	}
+	if accessToken != tokenRefreshResponse.AccessToken {
+		t.Errorf("access tokens do not match: %v vs. %v", accessToken, tokenRefreshResponse.AccessToken)
 	}
 
-	if tokenStore.RefreshToken() != tokenRefreshResponse.RefreshToken {
-		t.Errorf("refresh tokens do not match: %v vs. %v", tokenStore.RefreshToken(), tokenRefreshResponse.RefreshToken)
+	refreshToken, err := tokenStore.GetRefreshToken()
+	if err != nil {
+		t.Errorf("Error getting refresh token: %v", err)
 	}
-
+	if refreshToken != tokenRefreshResponse.RefreshToken {
+		t.Errorf("refresh tokens do not match: %v vs. %v", refreshToken, tokenRefreshResponse.RefreshToken)
+	}
 
 }

@@ -1,13 +1,11 @@
 package egobee
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 )
@@ -117,20 +115,20 @@ type TokenRefreshResponse struct {
 	Scope        Scope         `json:"scope"`
 }
 
-// TokenStore for ecobee Access and Refresh tokens.
-type TokenStore interface {
+// TokenStorer for ecobee Access and Refresh tokens.
+type TokenStorer interface {
 	// AccessToken gets the access token from the store.
-	AccessToken() string
+	GetAccessToken() (string, error)
 
 	// RefreshToken gets the refresh token from the store.
-	RefreshToken() string
+	GetRefreshToken() (string, error)
 
 	// ValidFor reports how much longer the access token is valid.
-	ValidFor() time.Duration
+	GetValidFor() (time.Duration, error)
 
-	// Update the TokenStore with the contents of the response. This mutates the
+	// Update the TokenStorer with the contents of the response. This mutates the
 	// access and refresh tokens.
-	Update(*TokenRefreshResponse)
+	Update(*TokenRefreshResponse) error
 }
 
 // memoryStore implements tokenStore backed only by memory.
@@ -141,94 +139,108 @@ type memoryStore struct {
 	validUntil   time.Time
 }
 
-func (s *memoryStore) AccessToken() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.accessToken
+// persistentStore implements tokenStore backed by disk.
+type persistentStore struct {
+	mu           sync.RWMutex // protects the following members
+	AccessToken  string
+	RefreshToken string
+	ValidUntil   time.Time
 }
 
-func AccessToken() (string, error) {
-	s, err := getPersistentTokenData()
+func (s *memoryStore) GetAccessToken() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.accessToken, nil
+}
+
+func (s *persistentStore) GetAccessToken() (string, error) {
+	err := s.getPersistentTokenData()
 	if err != nil {
 		return "", err
 	}
 
-	return strings.Split(s, ":")[0], err
-}
-
-func (s *memoryStore) RefreshToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.refreshToken
+	return s.AccessToken, err
 }
 
-func RefreshToken() (string, error) {
-	s, err := getPersistentTokenData()
+func (s *memoryStore) GetRefreshToken() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.refreshToken, nil
+}
+
+func (s *persistentStore) GetRefreshToken() (string, error) {
+	err := s.getPersistentTokenData()
 	if err != nil {
 		return "", err
 	}
-
-	return strings.Split(s, ":")[1], err
-}
-
-func (s *memoryStore) ValidFor() time.Duration {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return time.Now().Sub(s.validUntil)
+	return s.RefreshToken, err
 }
 
-func ValidFor() (time.Duration, error) {
-	s, err := getPersistentTokenData()
+func (s *memoryStore) GetValidFor() (time.Duration, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return time.Now().Sub(s.validUntil), nil
+}
+
+func (s *persistentStore) GetValidFor() (time.Duration, error) {
+	err := s.getPersistentTokenData()
 	if err != nil {
 		return 0, err
 	}
-	
-	validUntil, err := time.Parse(time.RFC3339, strings.Split(s, ":")[2]) 
-	if err != nil {
-		return 0, err
-	}
-
-	return time.Now().Sub(validUntil), err
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return time.Now().Sub(s.ValidUntil), err
 }
 
-func (s *memoryStore) Update(r *TokenRefreshResponse) {
+func (s *memoryStore) Update(r *TokenRefreshResponse) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accessToken = r.AccessToken
 	s.refreshToken = r.RefreshToken
 	s.validUntil = generateValidUntil(r)
-}
-
-func Update(r *TokenRefreshResponse) error {
-	s, err := os.Create("/tmp/memoryStore")
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	data := fmt.Sprintf("%s:%s:%s", r.AccessToken, r.RefreshToken, generateValidUntil(r))
-
-	// Write token data to file to be accessed later
-	s.WriteString(data)
 
 	return nil
 }
 
-// NewMemoryTokenStore is a TokenStore with no persistence.
-func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStore {
+func (s *persistentStore) Update(r *TokenRefreshResponse) error {
+	f, err := os.Create("/tmp/tokenStore")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Update in-memory data
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.AccessToken = r.AccessToken
+	s.RefreshToken = r.RefreshToken
+	s.ValidUntil = generateValidUntil(r)
+
+	// Write token data to file to be accessed later
+	encoder := gob.NewEncoder(f)
+	err = encoder.Encode(s)
+
+	return err
+}
+
+// NewMemoryTokenStore is a TokenStorer with no persistence.
+func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStorer {
 	s := &memoryStore{}
 	s.Update(r)
 	return s
 }
 
-func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStore, error) {
-	s := &memoryStore{}
+// NewPersistentTokenStore is a ToeknStorer with persistence to disk
+func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
+	s := &persistentStore{}
 	// update persistent storage
-	if err := Update(r); err != nil {
+	if err := s.Update(r); err != nil {
 		return nil, err
 	}
-	// update local memory storage
-	s.Update(r)
 	return s, nil
 }
 
@@ -239,13 +251,13 @@ func generateValidUntil(r *TokenRefreshResponse) time.Time {
 }
 
 // getPersistentTokenData returns the token data stored in a local file
-func getPersistentTokenData() (string, error) {
-	buf, err := ioutil.ReadFile("/tmp/memoryStore")
+func (s *persistentStore) getPersistentTokenData() error {
+	f, err := os.Open("/tmp/tokenStore")
 	if err != nil {
-		return "", err
+		return err
 	}
-	s := string(buf)
+	decoder := gob.NewDecoder(f)
+	err = decoder.Decode(s)
 
-	return s, err
+	return err
 }
-
