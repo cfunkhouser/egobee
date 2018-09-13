@@ -388,32 +388,32 @@ var (
 // meaningful in certain request types.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/objects/Selection.shtml
 type Selection struct {
-	SelectionType               SelectionType `json:"selectionType"`
-	SelectionMatch              string        `json:"selectionMatch"`
-	IncludeRuntime              bool          `json:"includeRuntime"`
-	IncludeExtendedRuntime      bool          `json:"includeExtendedRuntime"`
-	IncludeElectricity          bool          `json:"includeElectricity"`
-	IncludeSettings             bool          `json:"includeSettings"`
-	IncludeLocation             bool          `json:"includeLocation"`
-	IncludeProgram              bool          `json:"includeProgram"`
-	IncludeEvents               bool          `json:"includeEvents"`
-	IncludeDevice               bool          `json:"includeDevice"`
-	IncludeTechnician           bool          `json:"includeTechnician"`
-	IncludeUtility              bool          `json:"includeUtility"`
-	IncludeManagement           bool          `json:"includeManagement"`
-	IncludeAlerts               bool          `json:"includeAlerts"`
-	IncludeReminders            bool          `json:"includeReminders"`
-	IncludeWeather              bool          `json:"includeWeather"`
-	IncludeHouseDetails         bool          `json:"includeHouseDetails"`
-	IncludeOemCfg               bool          `json:"includeOemCfg"`
-	IncludeEquipmentStatus      bool          `json:"includeEquipmentStatus"`
-	IncludeNotificationSettings bool          `json:"includeNotificationSettings"`
-	IncludePrivacy              bool          `json:"includePrivacy"`
-	IncludeVersion              bool          `json:"includeVersion"`
-	IncludeSecuritySettings     bool          `json:"includeSecuritySettings"`
-	IncludeSensors              bool          `json:"includeSensors"`
-	IncludeAudio                bool          `json:"includeAudio"`
-	IncludeEnergy               bool          `json:"includeEnergy"`
+	SelectionType               SelectionType `json:"selectionType,omitempty"`
+	SelectionMatch              string        `json:"selectionMatch,omitempty"`
+	IncludeRuntime              bool          `json:"includeRuntime,omitempty"`
+	IncludeExtendedRuntime      bool          `json:"includeExtendedRuntime,omitempty"`
+	IncludeElectricity          bool          `json:"includeElectricity,omitempty"`
+	IncludeSettings             bool          `json:"includeSettings,omitempty"`
+	IncludeLocation             bool          `json:"includeLocation,omitempty"`
+	IncludeProgram              bool          `json:"includeProgram,omitempty"`
+	IncludeEvents               bool          `json:"includeEvents,omitempty"`
+	IncludeDevice               bool          `json:"includeDevice,omitempty"`
+	IncludeTechnician           bool          `json:"includeTechnician,omitempty"`
+	IncludeUtility              bool          `json:"includeUtility,omitempty"`
+	IncludeManagement           bool          `json:"includeManagement,omitempty"`
+	IncludeAlerts               bool          `json:"includeAlerts,omitempty"`
+	IncludeReminders            bool          `json:"includeReminders,omitempty"`
+	IncludeWeather              bool          `json:"includeWeather,omitempty"`
+	IncludeHouseDetails         bool          `json:"includeHouseDetails,omitempty"`
+	IncludeOemCfg               bool          `json:"includeOemCfg,omitempty"`
+	IncludeEquipmentStatus      bool          `json:"includeEquipmentStatus,omitempty"`
+	IncludeNotificationSettings bool          `json:"includeNotificationSettings,omitempty"`
+	IncludePrivacy              bool          `json:"includePrivacy,omitempty"`
+	IncludeVersion              bool          `json:"includeVersion,omitempty"`
+	IncludeSecuritySettings     bool          `json:"includeSecuritySettings,omitempty"`
+	IncludeSensors              bool          `json:"includeSensors,omitempty"`
+	IncludeAudio                bool          `json:"includeAudio,omitempty"`
+	IncludeEnergy               bool          `json:"includeEnergy,omitempty"`
 }
 
 // Sensor represents a sensor connected to the thermostat. Sensors may not be
