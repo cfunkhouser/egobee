@@ -179,7 +179,7 @@ func (s *memoryStore) RefreshToken() string {
 func (s *memoryStore) ValidFor() time.Duration {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return time.Now().Sub(s.validUntil)
+	return s.validUntil.Sub(time.Now())
 }
 
 func (s *memoryStore) Update(r *TokenRefreshResponse) {
