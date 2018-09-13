@@ -47,7 +47,6 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	// data, but requires the JSON to be attached as an encoded query parameter,
 	// instead of as the request body.
 	url := fmt.Sprintf(`%v?json=%v`, ecobeeThermostatSumaryURL, url.QueryEscape(string(qb)))
-	log.Printf("URL: %v", url)
 	r, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
