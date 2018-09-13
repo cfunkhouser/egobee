@@ -10,16 +10,17 @@ import (
 
 const ecobeeThermostatSumaryURL = "https://api.ecobee.com/1/thermostatSummary"
 
+// ThermostatSummary describes Thermostats and their status according to the
+// API.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
 type ThermostatSummary struct {
-	RevisionList    []string
-	ThermostatCount int
-	StatusList      []string
-	Status          Status
-}
-
-type Status struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	RevisionList    []string `json:"revisionList,omitempty"`
+	ThermostatCount int      `json:"thermostatCount,omitempty"`
+	StatusList      []string `json:"statusList,omitempty"`
+	Status          struct {
+		Code    int    `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	} `json:"status,omitempty"`
 }
 
 type jsonSelection struct {
@@ -42,6 +43,9 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The thermostatSummary API is unusual in that it requires a POST of JSON
+	// data, but requires the JSON to be attached as an encoded query parameter,
+	// instead of as the request body.
 	url := fmt.Sprintf(`%v?json=%v`, ecobeeThermostatSumaryURL, url.QueryEscape(string(qb)))
 	log.Printf("URL: %v", url)
 	r, err := http.NewRequest(http.MethodGet, url, nil)
