@@ -43,9 +43,9 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The thermostatSummary API is unusual in that it requires a POST of JSON
-	// data, but requires the JSON to be attached as an encoded query parameter,
-	// instead of as the request body.
+	// The thermostatSummary API is unusual in that it requires JSON data, but
+	// expects it to be attached as an encoded query parameter sent via GET,
+	// instead of as the request body via POST as most ecobee API calls.
 	url := fmt.Sprintf(`%v?json=%v`, ecobeeThermostatSumaryURL, url.QueryEscape(string(qb)))
 	r, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
