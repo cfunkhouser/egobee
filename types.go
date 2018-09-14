@@ -615,6 +615,19 @@ type Thermostat struct {
 // TODO(cfunkhouser): reverse engineer this struct.
 type ThermostatReminder2 struct{}
 
+// ThermostatSummary describes Thermostats and their status according to the
+// API.
+// See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
+type ThermostatSummary struct {
+	RevisionList    []string `json:"revisionList,omitempty"`
+	ThermostatCount int      `json:"thermostatCount,omitempty"`
+	StatusList      []string `json:"statusList,omitempty"`
+	Status          struct {
+		Code    int    `json:"code,omitempty"`
+		Message string `json:"message,omitempty"`
+	} `json:"status,omitempty"`
+}
+
 // Utility the Thermostat belongs to. May not be modified.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/objects/Utility.shtml
 type Utility struct {
