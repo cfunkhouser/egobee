@@ -57,6 +57,9 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 		log.Fatalf("Failed to Do request: %v", err)
 	}
 	defer res.Body.Close()
+	if (res.StatusCode / 100) != 2 {
+		return nil, fmt.Errorf("non-ok status response from API: %v", res.Status)
+	}
 	ts := &ThermostatSummary{}
 	if err := json.NewDecoder(res.Body).Decode(ts); err != nil {
 		return nil, err
