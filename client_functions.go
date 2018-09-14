@@ -10,20 +10,9 @@ import (
 
 const ecobeeThermostatSumaryURL = "https://api.ecobee.com/1/thermostatSummary"
 
-// ThermostatSummary describes Thermostats and their status according to the
-// API.
-// See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
-type ThermostatSummary struct {
-	RevisionList    []string `json:"revisionList,omitempty"`
-	ThermostatCount int      `json:"thermostatCount,omitempty"`
-	StatusList      []string `json:"statusList,omitempty"`
-	Status          struct {
-		Code    int    `json:"code,omitempty"`
-		Message string `json:"message,omitempty"`
-	} `json:"status,omitempty"`
-}
-
-type jsonSelection struct {
+// summarySelection wraps a Selection, and serializes to the format expected by
+// the thermostatSummary API.
+type summarySelection struct {
 	Selection Selection `json:"selection"`
 }
 
@@ -33,7 +22,7 @@ type jsonSelection struct {
 // data.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
 func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
-	s := &jsonSelection{
+	s := &summarySelection{
 		Selection: Selection{
 			SelectionType: SelectionTypeRegistered,
 			IncludeAlerts: true,
