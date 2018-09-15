@@ -1,5 +1,10 @@
 package egobee
 
+import (
+	"fmt"
+	"strconv"
+)
+
 // This file contains types for the ecobee v1 API as defined in the ecobee
 // developer documentation.
 
@@ -304,6 +309,12 @@ type Program struct {
 	CurrentClimateRef string     `json:"currentClimateRef"`
 }
 
+// Common remote sensor capability IDs.
+const (
+	CapabilityTypeOccupancy   = "occupancy"
+	CapabilityTypeTemperature = "temperature"
+)
+
 // RemoteSensor represents a sensor connected to the thermostat.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/objects/RemoteSensor.shtml
 type RemoteSensor struct {
@@ -313,6 +324,22 @@ type RemoteSensor struct {
 	Code       string                   `json:"code"`
 	InUse      bool                     `json:"inUse"`
 	Capability []RemoteSensorCapability `json:"capability"`
+}
+
+// Temperature gets the temperature for the sensor if it exists.
+func (s *RemoteSensor) Temperature() (float64, error) {
+	if s != nil && len(s.Capability) > 0 {
+		for _, c := range s.Capability {
+			if c.Type == CapabilityTypeTemperature {
+				v, err := strconv.ParseFloat(c.Value, 64)
+				if err != nil {
+					return 0.0, err
+				}
+				return float64(v / 10), nil
+			}
+		}
+	}
+	return 0.0, fmt.Errorf("remote sensor %v does not have a temperature capability", s.Name)
 }
 
 // RemoteSensorCapability represents the specific capability of a sensor
@@ -346,8 +373,8 @@ type Runtime struct {
 	DesiredHumidity    int    `json:"desiredHumidity"`
 	DesiredDehumidity  int    `json:"desiredDehumidity"`
 	DesiredFanMode     string `json:"desiredFanMode"`
-	DesiredHeatRange   int    `json:"desiredHeatRange"`
-	DesiredCoolRange   int    `json:"desiredCoolRange"`
+	DesiredHeatRange   []int  `json:"desiredHeatRange"`
+	DesiredCoolRange   []int  `json:"desiredCoolRange"`
 }
 
 // SecuritySettings defines the security settings which a thermostat may have.
@@ -389,7 +416,7 @@ var (
 // See https://www.ecobee.com/home/developer/api/documentation/v1/objects/Selection.shtml
 type Selection struct {
 	SelectionType               SelectionType `json:"selectionType,omitempty"`
-	SelectionMatch              string        `json:"selectionMatch,omitempty"`
+	SelectionMatch              string        `json:"selectionMatch"`
 	IncludeRuntime              bool          `json:"includeRuntime,omitempty"`
 	IncludeExtendedRuntime      bool          `json:"includeExtendedRuntime,omitempty"`
 	IncludeElectricity          bool          `json:"includeElectricity,omitempty"`
