@@ -2,6 +2,7 @@ package egobee
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -155,4 +156,38 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, wanted: %+v", got, want)
 	}
+}
+
+func TestNewPersistentTokenStore(t *testing.T) {
+	// This JSON has stray whitespace which is preserved from the source docs.
+	tokenRefreshResponse := &TokenRefreshResponse{
+		AccessToken:  "Rc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "og2Obost3ucRo1ofo0EDoslGltmFMe2g",
+		Scope:        ScopeSmartWrite,
+	}
+
+	tokenStore, err := NewPersistentTokenStore(tokenRefreshResponse)
+	if err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+
+	// TODO(sfunkhouser): use configured path
+	if _, err := os.Stat("/tmp/tokenStore"); err != nil {
+		t.Errorf("Persistent file does not exist: %v", err)
+	}
+
+	if tokenStore.AccessToken() != tokenRefreshResponse.AccessToken {
+		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
+	}
+
+	refreshToken, err := tokenStore.RefreshToken()
+	if err != nil {
+		t.Errorf("Error getting refresh token: %v", err)
+	}
+	if refreshToken != tokenRefreshResponse.RefreshToken {
+		t.Errorf("refresh tokens do not match: %v vs. %v", refreshToken, tokenRefreshResponse.RefreshToken)
+	}
+
 }

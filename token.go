@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
+	"os"
 	"regexp"
 	"sync"
 	"time"
@@ -140,20 +142,20 @@ func (r *TokenRefreshResponse) Populate(reader io.Reader) error {
 	return d.Decode(r)
 }
 
-// TokenStore for ecobee Access and Refresh tokens.
-type TokenStore interface {
+// TokenStorer for ecobee Access and Refresh tokens.
+type TokenStorer interface {
 	// AccessToken gets the access token from the store.
 	AccessToken() string
 
 	// RefreshToken gets the refresh token from the store.
-	RefreshToken() string
+	RefreshToken() (string, error)
 
 	// ValidFor reports how much longer the access token is valid.
 	ValidFor() time.Duration
 
-	// Update the TokenStore with the contents of the response. This mutates the
+	// Update the TokenStorer with the contents of the response. This mutates the
 	// access and refresh tokens.
-	Update(*TokenRefreshResponse)
+	Update(*TokenRefreshResponse) error
 }
 
 // memoryStore implements tokenStore backed only by memory.
@@ -170,10 +172,10 @@ func (s *memoryStore) AccessToken() string {
 	return s.accessToken
 }
 
-func (s *memoryStore) RefreshToken() string {
+func (s *memoryStore) RefreshToken() (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.refreshToken
+	return s.refreshToken, nil
 }
 
 func (s *memoryStore) ValidFor() time.Duration {
@@ -182,18 +184,124 @@ func (s *memoryStore) ValidFor() time.Duration {
 	return s.validUntil.Sub(time.Now())
 }
 
-func (s *memoryStore) Update(r *TokenRefreshResponse) {
+func (s *memoryStore) Update(r *TokenRefreshResponse) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accessToken = r.AccessToken
 	s.refreshToken = r.RefreshToken
-	// Subtract a few seconds to allow for network and processing delays.
-	s.validUntil = time.Now().Add(r.ExpiresIn.Duration - (15 * time.Second))
+	s.validUntil = generateValidUntil(r)
+
+	return nil
 }
 
-// NewMemoryTokenStore is a TokenStore with no persistence.
-func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStore {
+// NewMemoryTokenStore is a TokenStorer with no persistence.
+func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStorer {
 	s := &memoryStore{}
 	s.Update(r)
 	return s
+}
+
+// persistentStoreData stores the data in memory matching the data stored to disk
+type persistentStoreData struct {
+	AccessTokenData  string    `json:"accessToken"`
+	RefreshTokenData string    `json:"refreshToken"`
+	ValidUntilData   time.Time `json:"validUntil"`
+}
+
+// persistentStore implements tokenStore backed by disk.
+type persistentStore struct {
+	mu sync.RWMutex // protects the following members
+	persistentStoreData
+}
+
+func (s *persistentStore) AccessToken() string {
+	err := s.getPersistentTokenData()
+	if err != nil {
+		return ""
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.AccessTokenData
+}
+
+func (s *persistentStore) RefreshToken() (string, error) {
+	err := s.getPersistentTokenData()
+	if err != nil {
+		return "", err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.RefreshTokenData, err
+}
+
+func (s *persistentStore) ValidFor() time.Duration {
+	err := s.getPersistentTokenData()
+	if err != nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ValidUntilData.Sub(time.Now())
+}
+
+func (s *persistentStore) Update(r *TokenRefreshResponse) error {
+	f, err := os.Create("/tmp/tokenStore")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Update in-memory data
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.AccessTokenData = r.AccessToken
+	s.RefreshTokenData = r.RefreshToken
+	s.ValidUntilData = generateValidUntil(r)
+
+	// Write token data to file to be accessed later
+	jsonData, err := json.Marshal(s.persistentStoreData)
+	if err != nil {
+		return err
+	}
+	f.Write(jsonData)
+
+	return err
+}
+
+// NewPersistentTokenStore is a ToeknStorer with persistence to disk
+func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
+	s := &persistentStore{}
+	// update persistent storage
+	if err := s.Update(r); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// getPersistentTokenData returns the token data stored in a local file
+func (s *persistentStore) getPersistentTokenData() error {
+	// TODO(sfunkhouser): make this file configurable
+	f, err := os.Open("/tmp/tokenStore")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Update in-memory data
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	jsonData, err := ioutil.ReadAll(f)
+	json.Unmarshal(jsonData, &s.persistentStoreData)
+
+	return err
+}
+
+// generateValidUntil returns the time the token expires with an added buffer
+func generateValidUntil(r *TokenRefreshResponse) time.Time {
+	// Subtract a few seconds to allow for network and processing delays.
+	return time.Now().Add(r.ExpiresIn.Duration - (15 * time.Second))
 }
