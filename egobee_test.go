@@ -7,30 +7,32 @@ import (
 	"time"
 )
 
-type fakeTokenStore struct {
+type fakeTokenStorer struct {
 	access  string
 	refresh string
 	vf      time.Duration
 }
 
-func (s *fakeTokenStore) AccessToken() string {
+func (s *fakeTokenStorer) AccessToken() string {
 	return s.access
 }
 
-func (s *fakeTokenStore) RefreshToken() string {
+func (s *fakeTokenStorer) RefreshToken() string {
 	return s.refresh
 }
 
-func (s *fakeTokenStore) ValidFor() time.Duration {
+func (s *fakeTokenStorer) ValidFor() time.Duration {
 	return s.vf
 }
 
-func (s *fakeTokenStore) Update(r *TokenRefreshResponse) {}
+func (s *fakeTokenStorer) Update(r *TokenRefreshResponse) error {
+	return nil
+}
 
 func TestAuthorizingTransport(t *testing.T) {
 	clientForTest := http.Client{
 		Transport: &authorizingTransport{
-			auth:      &fakeTokenStore{"thisisanaccesstoken", "thisisarefreshtoken", time.Minute * 30},
+			auth:      &fakeTokenStorer{"thisisanaccesstoken", "thisisarefreshtoken", time.Minute * 30},
 			transport: http.DefaultTransport,
 		},
 	}
@@ -96,27 +98,27 @@ func TestReauthResponse_OK(t *testing.T) {
 func TestAuthorizingTransport_ShouldReauth(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		ts   TokenStore
+		ts   TokenStorer
 		want bool
 	}{
 		{
 			name: "shouldn't reauth",
-			ts:   &fakeTokenStore{"foo", "bar", time.Minute * 30},
+			ts:   &fakeTokenStorer{"foo", "bar", time.Minute * 30},
 			want: false,
 		},
 		{
 			name: "reauth for time",
-			ts:   &fakeTokenStore{"foo", "bar", time.Second},
+			ts:   &fakeTokenStorer{"foo", "bar", time.Second},
 			want: true,
 		},
 		{
 			name: "reauth for token",
-			ts:   &fakeTokenStore{"", "", time.Minute * 30},
+			ts:   &fakeTokenStorer{"", "", time.Minute * 30},
 			want: true,
 		},
 		{
 			name: "reauth for both", // just for good measure.
-			ts:   &fakeTokenStore{"", "", time.Second},
+			ts:   &fakeTokenStorer{"", "", time.Second},
 			want: true,
 		},
 	} {

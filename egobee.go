@@ -49,7 +49,7 @@ func reauthResponseFromHTTPResponse(resp *http.Response) (*reauthResponse, error
 // authorizingTransport is a RoundTripper which includes the Access token in the
 // request headers as appropriate for accessing the ecobee API.
 type authorizingTransport struct {
-	auth      TokenStore
+	auth      TokenStorer
 	transport http.RoundTripper
 	appID     string
 }
@@ -97,7 +97,7 @@ type Client struct {
 }
 
 // New egobee client.
-func New(appID string, ts TokenStore) *Client {
+func New(appID string, ts TokenStorer) *Client {
 	return &Client{
 		Client: http.Client{
 			Transport: &authorizingTransport{
