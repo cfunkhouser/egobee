@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"sync"
@@ -148,7 +147,7 @@ type TokenStorer interface {
 	AccessToken() string
 
 	// RefreshToken gets the refresh token from the store.
-	RefreshToken() (string, error)
+	RefreshToken() string
 
 	// ValidFor reports how much longer the access token is valid.
 	ValidFor() time.Duration
@@ -172,10 +171,10 @@ func (s *memoryStore) AccessToken() string {
 	return s.accessToken
 }
 
-func (s *memoryStore) RefreshToken() (string, error) {
+func (s *memoryStore) RefreshToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.refreshToken, nil
+	return s.refreshToken
 }
 
 func (s *memoryStore) ValidFor() time.Duration {
@@ -215,31 +214,18 @@ type persistentStore struct {
 }
 
 func (s *persistentStore) AccessToken() string {
-	err := s.getPersistentTokenData()
-	if err != nil {
-		return ""
-	}
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.AccessTokenData
 }
 
-func (s *persistentStore) RefreshToken() (string, error) {
-	err := s.getPersistentTokenData()
-	if err != nil {
-		return "", err
-	}
+func (s *persistentStore) RefreshToken() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.RefreshTokenData, err
+	return s.RefreshTokenData
 }
 
 func (s *persistentStore) ValidFor() time.Duration {
-	err := s.getPersistentTokenData()
-	if err != nil {
-		return 0
-	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.ValidUntilData.Sub(time.Now())
@@ -261,19 +247,13 @@ func (s *persistentStore) Update(r *TokenRefreshResponse) error {
 	s.ValidUntilData = generateValidUntil(r)
 
 	// Write token data to file to be accessed later
-	jsonData, err := json.Marshal(s.persistentStoreData)
-	if err != nil {
-		return err
-	}
-	f.Write(jsonData)
-
-	return err
+	return json.NewEncoder(f).Encode(&s.persistentStoreData)
 }
 
-// NewPersistentTokenStore is a ToeknStorer with persistence to disk
+// NewPersistentTokenStore is a TokenStorer with persistence to disk
 func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
 	s := &persistentStore{}
-	// update persistent storage
+	// update persistent storage tokenstore
 	if err := s.Update(r); err != nil {
 		return nil, err
 	}
@@ -281,10 +261,20 @@ func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
 	return s, nil
 }
 
-// getPersistentTokenData returns the token data stored in a local file
-func (s *persistentStore) getPersistentTokenData() error {
+// NewPersistentTokenFromDisk returns a TokenStorer based on disk location
+func NewPersistentTokenFromDisk(f string) (TokenStorer, error) {
+	s := &persistentStore{}
 	// TODO(sfunkhouser): make this file configurable
-	f, err := os.Open("/tmp/tokenStore")
+	if err := s.getPersistentTokenDataFromDisk("/tmp/tokenStore"); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// getPersistentTokenData returns the token data stored in a local file
+func (s *persistentStore) getPersistentTokenDataFromDisk(loc string) error {
+	f, err := os.Open(loc)
 	if err != nil {
 		return err
 	}
@@ -294,10 +284,7 @@ func (s *persistentStore) getPersistentTokenData() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	jsonData, err := ioutil.ReadAll(f)
-	json.Unmarshal(jsonData, &s.persistentStoreData)
-
-	return err
+	return json.NewDecoder(f).Decode(&s.persistentStoreData)
 }
 
 // generateValidUntil returns the time the token expires with an added buffer

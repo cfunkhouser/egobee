@@ -159,7 +159,6 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 }
 
 func TestNewPersistentTokenStore(t *testing.T) {
-	// This JSON has stray whitespace which is preserved from the source docs.
 	tokenRefreshResponse := &TokenRefreshResponse{
 		AccessToken:  "Rc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
 		TokenType:    "Bearer",
@@ -182,12 +181,45 @@ func TestNewPersistentTokenStore(t *testing.T) {
 		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
 	}
 
-	refreshToken, err := tokenStore.RefreshToken()
-	if err != nil {
-		t.Errorf("Error getting refresh token: %v", err)
+	if tokenStore.RefreshToken() != tokenRefreshResponse.RefreshToken {
+		t.Errorf("refresh tokens do not match: %v vs. %v", tokenStore.RefreshToken(), tokenRefreshResponse.RefreshToken)
 	}
-	if refreshToken != tokenRefreshResponse.RefreshToken {
-		t.Errorf("refresh tokens do not match: %v vs. %v", refreshToken, tokenRefreshResponse.RefreshToken)
+
+}
+
+func TestNewPersistentTokenStoreFromDisk(t *testing.T) {
+	// Create persistent token store
+	tokenRefreshResponse := &TokenRefreshResponse{
+		AccessToken:  "Bc7JE8P7XUgSCPogLOx2VLMfITqQQrjg",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "og2Obost3ucRo1ofo0EDoslGltmFMe2g",
+		Scope:        ScopeSmartWrite,
+	}
+
+	tokenStore, err := NewPersistentTokenStore(tokenRefreshResponse)
+	if err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+
+	// TODO(sfunkhouser): use configured path
+	path := "/tmp/tokenStore"
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("Persistent file does not exist: %v", err)
+	}
+
+	// Now retrieve from disk and ensure they match
+	tokenStore, err = NewPersistentTokenFromDisk(path)
+	if err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+
+	if tokenStore.AccessToken() != tokenRefreshResponse.AccessToken {
+		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
+	}
+
+	if tokenStore.RefreshToken() != tokenRefreshResponse.RefreshToken {
+		t.Errorf("refresh tokens do not match: %v vs. %v", tokenStore.RefreshToken(), tokenRefreshResponse.RefreshToken)
 	}
 
 }

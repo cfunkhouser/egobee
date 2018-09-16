@@ -17,8 +17,8 @@ func (s *fakeTokenStorer) AccessToken() string {
 	return s.access
 }
 
-func (s *fakeTokenStorer) RefreshToken() (string, error) {
-	return s.refresh, nil
+func (s *fakeTokenStorer) RefreshToken() string {
+	return s.refresh
 }
 
 func (s *fakeTokenStorer) ValidFor() time.Duration {

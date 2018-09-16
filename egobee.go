@@ -5,7 +5,6 @@ package egobee
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -71,11 +70,7 @@ func (t *authorizingTransport) shouldReauth() bool {
 }
 
 func (t *authorizingTransport) sendReauth(url string) (*reauthResponse, error) {
-	refreshToken, err := t.auth.RefreshToken()
-	if err != nil {
-		log.Fatalf("Unable to get refreshToken for request: %v", err)
-	}
-	tokenURL := fmt.Sprintf("%v?grant_type=refresh_token&refresh_token=%v&client_id=%v", url, refreshToken, t.appID)
+	tokenURL := fmt.Sprintf("%v?grant_type=refresh_token&refresh_token=%v&client_id=%v", url, t.auth.RefreshToken(), t.appID)
 	resp, err := http.Post(tokenURL, "", nil)
 	if err != nil {
 		return nil, err
