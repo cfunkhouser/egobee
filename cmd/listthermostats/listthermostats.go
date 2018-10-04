@@ -1,9 +1,10 @@
-// listthermostats uses the ThermostatSummary API call to list thermostats for
-// an account.
+// listthermostats uses the Thermostats API call to list the latest temperature
+// readings for all registered thermostats.
 package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 var (
 	accessToken = flag.String("access_token", "", "Ecobee API Access Token")
-	appKey      = flag.String("app_key", "", "Ecobee Registered App ID")
+	appID       = flag.String("app", "", "Ecobee Registered App ID")
 )
 
 func main() {
@@ -20,8 +21,8 @@ func main() {
 	if *accessToken == "" {
 		log.Fatal("--access_token is require.")
 	}
-	if *appKey == "" {
-		log.Fatal("--app_key is required.")
+	if *appID == "" {
+		log.Fatal("--app_id is required.")
 	}
 
 	ts := egobee.NewMemoryTokenStore(&egobee.TokenRefreshResponse{
@@ -29,14 +30,28 @@ func main() {
 		// Some non-zero value is all it should take.
 		ExpiresIn: egobee.TokenDuration{Duration: time.Minute * 5},
 	})
-	c := egobee.New(*appKey, ts)
+	c := egobee.New(*appID, ts)
 
-	summary, err := c.ThermostatSummary()
+	thermostats, err := c.Thermostats(&egobee.Selection{
+		SelectionType:   egobee.SelectionTypeRegistered,
+		IncludeSettings: true,
+		IncludeRuntime:  true,
+		IncludeSensors:  true,
+	})
 	if err != nil {
 		log.Fatalf("This is no good: %+v", err)
 	}
-
-	for _, r := range summary.RevisionList {
-		log.Println(r)
+	for _, thermostat := range thermostats {
+		fmt.Printf("%v currently averaging %v\n", thermostat.Name, float64(float64(thermostat.Runtime.ActualTemperature)/10))
+		if len(thermostat.RemoteSensors) > 0 {
+			for _, sensor := range thermostat.RemoteSensors {
+				t, err := sensor.Temperature()
+				if err != nil {
+					log.Printf("Error getting temperature: %v", err)
+					continue // Skip the bad sensor.
+				}
+				fmt.Printf("  %v currently %v\n", sensor.Name, t)
+			}
+		}
 	}
 }
