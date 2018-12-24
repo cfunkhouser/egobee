@@ -200,6 +200,8 @@ func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStorer {
 	return s
 }
 
+const persistentStorePermissions = 0640
+
 // persistentStoreData stores the data in memory matching the data stored to disk
 type persistentStoreData struct {
 	AccessTokenData  string    `json:"accessToken"`
@@ -210,6 +212,7 @@ type persistentStoreData struct {
 // persistentStore implements tokenStore backed by disk.
 type persistentStore struct {
 	mu sync.RWMutex // protects the following members
+	f  *os.File     // File for store
 	persistentStoreData
 }
 
@@ -232,12 +235,6 @@ func (s *persistentStore) ValidFor() time.Duration {
 }
 
 func (s *persistentStore) Update(r *TokenRefreshResponse) error {
-	f, err := os.Create("/tmp/tokenStore")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	// Update in-memory data
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -247,12 +244,25 @@ func (s *persistentStore) Update(r *TokenRefreshResponse) error {
 	s.ValidUntilData = generateValidUntil(r)
 
 	// Write token data to file to be accessed later
-	return json.NewEncoder(f).Encode(&s.persistentStoreData)
+	return json.NewEncoder(s.f).Encode(&s.persistentStoreData)
+}
+
+// load the data from local file into memory.
+func (s *persistentStore) load() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return json.NewDecoder(s.f).Decode(&s.persistentStoreData)
 }
 
 // NewPersistentTokenStore is a TokenStorer with persistence to disk
-func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
-	s := &persistentStore{}
+func NewPersistentTokenStore(r *TokenRefreshResponse, path string) (TokenStorer, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, persistentStorePermissions)
+	if err != nil {
+		return nil, err
+	}
+	s := &persistentStore{
+		f: f,
+	}
 	// update persistent storage tokenstore
 	if err := s.Update(r); err != nil {
 		return nil, err
@@ -262,29 +272,15 @@ func NewPersistentTokenStore(r *TokenRefreshResponse) (TokenStorer, error) {
 }
 
 // NewPersistentTokenFromDisk returns a TokenStorer based on disk location
-func NewPersistentTokenFromDisk(f string) (TokenStorer, error) {
-	s := &persistentStore{}
-	// TODO(sfunkhouser): make this file configurable
-	if err := s.getPersistentTokenDataFromDisk("/tmp/tokenStore"); err != nil {
+func NewPersistentTokenFromDisk(path string) (TokenStorer, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, persistentStorePermissions)
+	if err != nil {
 		return nil, err
 	}
-
-	return s, nil
-}
-
-// getPersistentTokenData returns the token data stored in a local file
-func (s *persistentStore) getPersistentTokenDataFromDisk(loc string) error {
-	f, err := os.Open(loc)
-	if err != nil {
-		return err
+	s := &persistentStore{
+		f: f,
 	}
-	defer f.Close()
-
-	// Update in-memory data
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return json.NewDecoder(f).Decode(&s.persistentStoreData)
+	return s, s.load()
 }
 
 // generateValidUntil returns the time the token expires with an added buffer
