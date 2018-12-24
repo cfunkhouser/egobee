@@ -52,7 +52,7 @@ func main() {
 
 	resp, err = http.Post(tokenURL, "application/x-www-form-urlencoded", &buf)
 	if err != nil {
-		log.Fatalf("Failed to authenticate: %v")
+		log.Fatalf("Failed to authenticate: %v", err)
 	}
 	defer resp.Body.Close()
 
