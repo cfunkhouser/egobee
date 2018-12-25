@@ -29,6 +29,15 @@ var (
 	ScopeEMSWrite   Scope = "ems"
 )
 
+// PinAuthenticationChallenge is the initial response from the Ecobee API for
+// pin-based application authentication.
+type PinAuthenticationChallenge struct {
+	Pin               string `json:"ecobeePin"`
+	AuthorizationCode string `json:"code"`
+	Scope             Scope  `json:"scope"`
+	// expires_in and interval are ignored for now.
+}
+
 // TokenDuration wraps time.Duration to add JSON (un)marshalling
 type TokenDuration struct {
 	time.Duration
