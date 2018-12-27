@@ -127,4 +127,5 @@ func TestAuthorizingTransport_ShouldReauth(t *testing.T) {
 			t.Errorf("%v: got %v, wanted %v", tt.name, got, tt.want)
 		}
 	}
+	t.Fatal("This is a test.")
 }
