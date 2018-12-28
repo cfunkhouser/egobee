@@ -6,31 +6,33 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/cfunkhouser/egobee"
 )
 
 var (
-	accessToken = flag.String("access_token", "", "Ecobee API Access Token")
-	appID       = flag.String("app", "", "Ecobee Registered App ID")
+	appID     = flag.String("app", "", "Ecobee Registered App ID")
+	storePath = flag.String("store", "", "Persistent egobee credential store path")
 )
 
 func main() {
 	flag.Parse()
-	if *accessToken == "" {
-		log.Fatal("--access_token is require.")
-	}
+
 	if *appID == "" {
-		log.Fatal("--app_id is required.")
+		log.Fatal("--app is required")
+	}
+	if *storePath == "" {
+		log.Fatal("--store is required")
 	}
 
-	ts := egobee.NewMemoryTokenStore(&egobee.TokenRefreshResponse{
-		AccessToken: *accessToken,
-		// Some non-zero value is all it should take.
-		ExpiresIn: egobee.TokenDuration{Duration: time.Minute * 5},
-	})
+	ts, err := egobee.NewPersistentTokenStorer(*storePath)
+	if err != nil {
+		log.Fatalf("Failed to read store %q: %v", *storePath, err)
+	}
 	c := egobee.New(*appID, ts)
+	if !ts.Initialized() {
+		log.Fatalf("Store %q not initialized", *storePath)
+	}
 
 	thermostats, err := c.Thermostats(&egobee.Selection{
 		SelectionType:   egobee.SelectionTypeRegistered,
@@ -43,15 +45,13 @@ func main() {
 	}
 	for _, thermostat := range thermostats {
 		fmt.Printf("%v currently averaging %v\n", thermostat.Name, float64(float64(thermostat.Runtime.ActualTemperature)/10))
-		if len(thermostat.RemoteSensors) > 0 {
-			for _, sensor := range thermostat.RemoteSensors {
-				t, err := sensor.Temperature()
-				if err != nil {
-					log.Printf("Error getting temperature: %v", err)
-					continue // Skip the bad sensor.
-				}
-				fmt.Printf("  %v currently %v\n", sensor.Name, t)
+		for _, sensor := range thermostat.RemoteSensors {
+			t, err := sensor.Temperature()
+			if err != nil {
+				log.Printf("Error getting temperature: %v", err)
+				continue // Skip the bad sensor.
 			}
+			fmt.Printf("  %v currently %v\n", sensor.Name, t)
 		}
 	}
 }

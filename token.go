@@ -29,15 +29,6 @@ var (
 	ScopeEMSWrite   Scope = "ems"
 )
 
-// PinAuthenticationChallenge is the initial response from the Ecobee API for
-// pin-based application authentication.
-type PinAuthenticationChallenge struct {
-	Pin               string `json:"ecobeePin"`
-	AuthorizationCode string `json:"code"`
-	Scope             Scope  `json:"scope"`
-	// expires_in and interval are ignored for now.
-}
-
 // TokenDuration wraps time.Duration to add JSON (un)marshalling
 type TokenDuration struct {
 	time.Duration
@@ -164,6 +155,8 @@ type TokenStorer interface {
 	// Update the TokenStorer with the contents of the response. This mutates the
 	// access and refresh tokens.
 	Update(*TokenRefreshResponse) error
+
+	Initialized() bool
 }
 
 // memoryStore implements tokenStore backed only by memory.
@@ -202,11 +195,10 @@ func (s *memoryStore) Update(r *TokenRefreshResponse) error {
 	return nil
 }
 
-// NewMemoryTokenStore is a TokenStorer with no persistence.
-func NewMemoryTokenStore(r *TokenRefreshResponse) TokenStorer {
-	s := &memoryStore{}
-	s.Update(r)
-	return s
+func (s *memoryStore) Initialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.refreshToken != ""
 }
 
 const persistentStorePermissions = 0640
@@ -220,8 +212,8 @@ type persistentStoreData struct {
 
 // persistentStore implements tokenStore backed by disk.
 type persistentStore struct {
-	mu sync.RWMutex // protects the following members
-	f  *os.File     // File for store
+	mu   sync.RWMutex // protects the following members
+	path string
 	persistentStoreData
 }
 
@@ -248,48 +240,45 @@ func (s *persistentStore) Update(r *TokenRefreshResponse) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	f, err := os.OpenFile(s.path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, persistentStorePermissions)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
 	s.AccessTokenData = r.AccessToken
 	s.RefreshTokenData = r.RefreshToken
 	s.ValidUntilData = generateValidUntil(r)
 
 	// Write token data to file to be accessed later
-	return json.NewEncoder(s.f).Encode(&s.persistentStoreData)
+	return json.NewEncoder(f).Encode(&s.persistentStoreData)
+}
+
+func (s *persistentStore) Initialized() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.RefreshTokenData != ""
 }
 
 // load the data from local file into memory.
 func (s *persistentStore) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return json.NewDecoder(s.f).Decode(&s.persistentStoreData)
+	f, err := os.OpenFile(s.path, os.O_RDONLY, persistentStorePermissions)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewDecoder(f).Decode(&s.persistentStoreData)
 }
 
-// NewPersistentTokenStore is a TokenStorer with persistence to disk
-func NewPersistentTokenStore(r *TokenRefreshResponse, path string) (TokenStorer, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, persistentStorePermissions)
-	if err != nil {
-		return nil, err
-	}
+// NewPersistentTokenStorer returns a TokenStorer based on disk location
+func NewPersistentTokenStorer(path string) (TokenStorer, error) {
 	s := &persistentStore{
-		f: f,
+		path: path,
 	}
-	// update persistent storage tokenstore
-	if err := s.Update(r); err != nil {
-		return nil, err
-	}
-
+	s.load() // TODO(cfunkhouser): log this error somewhere useful, maybe.
 	return s, nil
-}
-
-// NewPersistentTokenFromDisk returns a TokenStorer based on disk location
-func NewPersistentTokenFromDisk(path string) (TokenStorer, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, persistentStorePermissions)
-	if err != nil {
-		return nil, err
-	}
-	s := &persistentStore{
-		f: f,
-	}
-	return s, s.load()
 }
 
 // generateValidUntil returns the time the token expires with an added buffer

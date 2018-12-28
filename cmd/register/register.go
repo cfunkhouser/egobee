@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/cfunkhouser/egobee"
 )
@@ -30,39 +27,25 @@ func main() {
 		log.Fatal("--store is required")
 	}
 
-	resp, err := http.Get(fmt.Sprintf(authURLTemplate, *appID))
+	ts, err := egobee.NewPersistentTokenStorer(*storePath)
 	if err != nil {
-		log.Fatalf("Failed to initialize Pin Authentication: %v", err)
+		log.Fatalf("Couldn't use store at %q: %v", *storePath, err)
+	}
+	auth := egobee.NewPinAuthenticator(*appID)
+	pin, err := auth.GetPin()
+	if err != nil {
+		log.Fatalf("Failed to initialize app %v: %v", *appID, err)
 	}
 
-	pac := &egobee.PinAuthenticationChallenge{}
-	if err := json.NewDecoder(resp.Body).Decode(pac); err != nil {
-		log.Fatalf("Failed to read Pin Authentication: %v", err)
-	}
-	resp.Body.Close()
-
-	fmt.Printf("Register with this PIN: %v\n", pac.Pin)
+	// Up to the caller to complete the auth flow out-of-band.
+	fmt.Printf("Register with PIN: %v\n", pin)
 	fmt.Println("Press any key to continue when done.")
 
 	var input string
 	fmt.Scanf("%s", &input)
 
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "grant_type=ecobeePin&code=%v&client_id=%v", pac.AuthorizationCode, *appID)
-
-	resp, err = http.Post(tokenURL, "application/x-www-form-urlencoded", &buf)
-	if err != nil {
-		log.Fatalf("Failed to authenticate: %v", err)
+	if err := auth.Finalize(ts); err != nil {
+		log.Fatalf("Failed to initalize app %v: %v", *appID, err)
 	}
-	defer resp.Body.Close()
-
-	trr := &egobee.TokenRefreshResponse{}
-	if err := json.NewDecoder(resp.Body).Decode(trr); err != nil {
-		log.Fatalf("Failed to decode authentication response: %v", err)
-	}
-	_, err = egobee.NewPersistentTokenStore(trr, *storePath)
-	if err != nil {
-		log.Fatalf("Failed to initialize persistent store: %v", err)
-	}
-	fmt.Printf("Created persistent store at %v\n", *storePath)
+	fmt.Printf("Created persistent store at %q\n", *storePath)
 }

@@ -159,38 +159,11 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 	}
 }
 
-func TestNewPersistentTokenStore(t *testing.T) {
-	testStorePath := "/tmp/tokenStore"
-	tokenRefreshResponse := &TokenRefreshResponse{
-		AccessToken:  "anAccessToken",
-		TokenType:    "Bearer",
-		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
-		RefreshToken: "aRefreshToken",
-		Scope:        ScopeSmartWrite,
-	}
-	tokenStore, err := NewPersistentTokenStore(tokenRefreshResponse, testStorePath)
-	if err != nil {
-		t.Errorf("got unexpected error: %v", err)
-	}
-	if _, err := os.Stat(testStorePath); err != nil {
-		t.Errorf("Persistent file does not exist: %v", err)
-	}
-	if tokenStore.AccessToken() != tokenRefreshResponse.AccessToken {
-		t.Errorf("access tokens do not match: %v vs. %v", tokenStore.AccessToken(), tokenRefreshResponse.AccessToken)
-	}
-	if tokenStore.RefreshToken() != tokenRefreshResponse.RefreshToken {
-		t.Errorf("refresh tokens do not match: %v vs. %v", tokenStore.RefreshToken(), tokenRefreshResponse.RefreshToken)
-	}
-	if err := os.Remove(testStorePath); err != nil {
-		t.Fatalf("Failed to remove temporary file: %v", err)
-	}
-}
-
-func TestNewPersistentTokenStoreFromDisk(t *testing.T) {
+func TestNewPersistentTokenStorer(t *testing.T) {
 	testStorePath := "/tmp/tokenStore"
 	testFileData := []byte(`{"accessToken":"anAccessToken","refreshToken":"aRefreshToken","validUntil":"2015-02-23T14:51:00.000000000-05:00"}`)
 	err := ioutil.WriteFile(testStorePath, testFileData, 0640)
-	tokenStore, err := NewPersistentTokenFromDisk(testStorePath)
+	tokenStore, err := NewPersistentTokenStorer(testStorePath)
 	if err != nil {
 		t.Errorf("got unexpected error: %v", err)
 	}
