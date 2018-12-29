@@ -8,6 +8,10 @@ import (
 	"net/url"
 )
 
+const (
+	requestContentType = "application/json; charset=utf-8"
+)
+
 // page is used for paging in some APIs.
 type page struct {
 	Page       int `json:"page"`
@@ -50,7 +54,7 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	r.Header.Add("Content-Type", "application/json; charset=utf-8")
+	r.Header.Add("Content-Type", requestContentType)
 	res, err := c.Do(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Do(): %v", err)
@@ -86,7 +90,7 @@ func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	r.Header.Add("Content-Type", "application/json; charset=utf-8")
+	r.Header.Add("Content-Type", requestContentType)
 	res, err := c.Do(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Do(): %v", err)
