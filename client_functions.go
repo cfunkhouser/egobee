@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	ecobeeThermostatSumaryURL = "https://api.ecobee.com/1/thermostatSummary"
-	ecobeeThermostatURL       = "https://api.ecobee.com/1/thermostat"
+	ecobeeThermostatSummaryURL = "https://api.ecobee.com/1/thermostatSummary"
+	ecobeeThermostatURL        = "https://api.ecobee.com/1/thermostat"
 )
 
 // page is used for paging in some APIs.
@@ -44,7 +44,7 @@ func assembleSelectURL(apiURL string, selection *Selection) (string, error) {
 // data.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
 func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
-	url, err := assembleSelectURL(ecobeeThermostatSumaryURL, &Selection{
+	url, err := assembleSelectURL(ecobeeThermostatSummaryURL, &Selection{
 		SelectionType: SelectionTypeRegistered,
 		IncludeAlerts: true,
 	})
