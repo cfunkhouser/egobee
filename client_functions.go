@@ -97,13 +97,16 @@ func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
 		return nil, fmt.Errorf("failed to Do(): %v", err)
 	}
 	defer res.Body.Close()
-	if (res.StatusCode / 100) != 2 {
-		return nil, fmt.Errorf("non-ok status response from API: %v", res.Status)
-	}
+
 	ptr := &pagedThermostatResponse{}
 	if err := json.NewDecoder(res.Body).Decode(ptr); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode response from API: %v", err)
 	}
+
+	if (res.StatusCode / 100) != 2 {
+		return nil, fmt.Errorf("non-ok status response from API: %v", ptr.Status.Message)
+	}
+
 	if ptr.Page.Page != ptr.Page.TotalPages {
 		// TODO(cfunkhouser): Handle paged responses.
 		log.Printf("WARNING: Skipped some paged responses!")
