@@ -9,7 +9,20 @@ import (
 	"time"
 )
 
-const ecobeeTokenURL = "https://api.ecobee.com/token"
+type apiBaseURL string
+
+func (a apiBaseURL) URL(apiPath string) string {
+	return string(a) + apiPath
+}
+
+const (
+	ecobeeAPIHost apiBaseURL = "https://api.ecobee.com"
+
+	// These API Paths are relative to the API Host above.
+	thermostatSummaryURL = "/1/thermostatSummary"
+	thermostatURL        = "/1/thermostat"
+	tokenURL             = "/token"
+)
 
 type reauthResponse struct {
 	Err  *AuthorizationErrorResponse
@@ -52,6 +65,7 @@ type authorizingTransport struct {
 	auth      TokenStorer
 	transport http.RoundTripper
 	appID     string
+	api       apiBaseURL
 }
 
 func (t *authorizingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -80,7 +94,7 @@ func (t *authorizingTransport) sendReauth(url string) (*reauthResponse, error) {
 }
 
 func (t *authorizingTransport) reauth() error {
-	r, err := t.sendReauth(ecobeeTokenURL)
+	r, err := t.sendReauth(t.api.URL(tokenURL))
 	if err != nil {
 		return err
 	}
@@ -93,17 +107,20 @@ func (t *authorizingTransport) reauth() error {
 
 // Client for the ecobee API.
 type Client struct {
+	api apiBaseURL
 	http.Client
 }
 
 // New egobee client.
 func New(appID string, ts TokenStorer) *Client {
 	return &Client{
+		api: ecobeeAPIHost,
 		Client: http.Client{
 			Transport: &authorizingTransport{
 				auth:      ts,
 				transport: http.DefaultTransport,
 				appID:     appID,
+				api:       ecobeeAPIHost,
 			},
 		},
 	}

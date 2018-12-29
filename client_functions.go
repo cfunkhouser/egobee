@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	ecobeeThermostatSumaryURL = "https://api.ecobee.com/1/thermostatSummary"
-	ecobeeThermostatURL       = "https://api.ecobee.com/1/thermostat"
+	requestContentType = "application/json; charset=utf-8"
 )
 
 // page is used for paging in some APIs.
@@ -44,7 +43,7 @@ func assembleSelectURL(apiURL string, selection *Selection) (string, error) {
 // data.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
 func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
-	url, err := assembleSelectURL(ecobeeThermostatSumaryURL, &Selection{
+	url, err := assembleSelectURL(c.api.URL(thermostatSummaryURL), &Selection{
 		SelectionType: SelectionTypeRegistered,
 		IncludeAlerts: true,
 	})
@@ -55,7 +54,7 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	r.Header.Add("Content-Type", "application/json; charset=utf-8")
+	r.Header.Add("Content-Type", requestContentType)
 	res, err := c.Do(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Do(): %v", err)
@@ -83,7 +82,7 @@ type pagedThermostatResponse struct {
 
 // Thermostats returns all Thermostat objects which match selection.
 func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
-	url, err := assembleSelectURL(ecobeeThermostatURL, selection)
+	url, err := assembleSelectURL(c.api.URL(thermostatURL), selection)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +90,7 @@ func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	r.Header.Add("Content-Type", "application/json; charset=utf-8")
+	r.Header.Add("Content-Type", requestContentType)
 	res, err := c.Do(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Do(): %v", err)

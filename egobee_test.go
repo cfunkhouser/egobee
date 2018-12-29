@@ -29,6 +29,14 @@ func (s *fakeTokenStorer) Update(r *TokenRefreshResponse) error {
 	return nil
 }
 
+func TestAPIBaseURL(t *testing.T) {
+	abu := apiBaseURL("http://foo")
+	want := "http://foo/bar/baz"
+	if got := abu.URL("/bar/baz"); got != want {
+		t.Errorf("got: %q, want: %q", got, want)
+	}
+}
+
 func TestAuthorizingTransport(t *testing.T) {
 	clientForTest := http.Client{
 		Transport: &authorizingTransport{
