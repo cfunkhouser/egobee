@@ -13,13 +13,13 @@ import (
 
 var (
 	accessToken = flag.String("access_token", "", "Ecobee API Access Token")
-	appID       = flag.String("app", "", "Ecobee Registered App ID")
+	appID       = flag.String("app_id", "", "Ecobee Registered App ID")
 )
 
 func main() {
 	flag.Parse()
 	if *accessToken == "" {
-		log.Fatal("--access_token is require.")
+		log.Fatal("--access_token is required.")
 	}
 	if *appID == "" {
 		log.Fatal("--app_id is required.")
