@@ -123,14 +123,8 @@ func TestValidateSelectionResponse(t *testing.T) {
 	}
 }
 
-func TestClientThermostatSummary(t *testing.T) {
-	testValidResponse := `{
-		"revisionList": ["revision1","revision2"],
-		"thermostatCount": 2,
-		"statusList": ["status1","status2"],
-		"status": {"code": 200, "message": "Ok"}
-	}`
-	serverForTest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func selectionRequestValidatingTestHandler(t *testing.T, testPayload string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Content-Type"); got != requestContentType {
 			t.Errorf("invalid Content-Type header; got: %q, want: %q", got, requestContentType)
 		}
@@ -139,13 +133,30 @@ func TestClientThermostatSummary(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", requestContentType)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(testValidResponse))
-	}))
-	defer serverForTest.Close()
-
-	clientForTest := &Client{
-		api: apiBaseURL(serverForTest.URL),
+		if testPayload != "" {
+			w.Write([]byte(testPayload))
+		}
 	}
+}
+
+func clientAndServerForTest(t *testing.T, testPayload string) (*Client, *httptest.Server) {
+	s := httptest.NewServer(selectionRequestValidatingTestHandler(t, testPayload))
+	c := &Client{
+		api: apiBaseURL(s.URL),
+	}
+	return c, s
+}
+
+func TestClientThermostatSummary(t *testing.T) {
+	testValidResponse := `{
+		"revisionList": ["revision1","revision2"],
+		"thermostatCount": 2,
+		"statusList": ["status1","status2"],
+		"status": {"code": 200, "message": "Ok"}
+	}`
+
+	client, server := clientAndServerForTest(t, testValidResponse)
+	defer server.Close()
 
 	want := &ThermostatSummary{
 		RevisionList:    []string{"revision1", "revision2"},
@@ -159,11 +170,90 @@ func TestClientThermostatSummary(t *testing.T) {
 			"Ok",
 		},
 	}
-	got, err := clientForTest.ThermostatSummary()
+	got, err := client.ThermostatSummary()
 	if err != nil {
 		t.Fatalf("got unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("return value check failed;\ngot: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestClientThermostats(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		response string
+		want     []*Thermostat
+	}{
+		{
+			name: "OK response with thermostats",
+			response: `{
+		"page": {
+			"page": 1,
+			"totalPages": 1,
+			"pageSize": 2,
+			"total": 2
+		},
+		"thermostatList": [
+			{ "name": "thermostat1" },
+			{ "name": "thermostat2" }
+		],
+		"status": { "code": 200, "message": "OK" }
+	}`,
+			want: []*Thermostat{
+				&Thermostat{Name: "thermostat1"},
+				&Thermostat{Name: "thermostat2"},
+			},
+		},
+		{
+			name: "response with thermostats and no page info",
+			response: `{
+		"thermostatList": [
+			{ "name": "thermostat1" },
+			{ "name": "thermostat2" }
+		],
+		"status": { "code": 200, "message": "OK" }
+	}`,
+			want: []*Thermostat{
+				&Thermostat{Name: "thermostat1"},
+				&Thermostat{Name: "thermostat2"},
+			},
+		},
+		{
+			name: "OK response with empty thermostat list",
+			response: `{
+		"page": {
+			"page": 1,
+			"totalPages": 1,
+			"pageSize": 2,
+			"total": 2
+		},
+		"thermostatList": [],
+		"status": { "code": 200, "message": "OK" }
+	}`,
+			want: []*Thermostat{},
+		},
+		{
+			name: "OK response with no thermostat list",
+			response: `{
+		"page": {
+			"page": 1,
+			"totalPages": 1,
+			"pageSize": 2,
+			"total": 2
+		},
+		"status": { "code": 200, "message": "OK" }
+	}`,
+		},
+	} {
+		client, server := clientAndServerForTest(t, tt.response)
+		got, err := client.Thermostats(&Selection{})
+		if err != nil {
+			t.Fatalf("case %q: got unexpected error: %v", tt.name, err)
+		}
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("case %q: return value check failed;\ngot: %#v\nwant: %#v", tt.name, got, tt.want)
+		}
+		server.Close()
 	}
 }
