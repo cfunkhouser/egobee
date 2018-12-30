@@ -1,13 +1,16 @@
 package egobee
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
-func TestAssembleSelectURL(t *testing.T) {
+func TestAssembleSelectionURL(t *testing.T) {
 	testAPIURL := "http://heylookathing"
 	testSelection := &Selection{
 		SelectionType:  SelectionTypeRegistered,
@@ -15,13 +18,108 @@ func TestAssembleSelectURL(t *testing.T) {
 	}
 
 	want := "http://heylookathing?json=%7B%22selection%22%3A%7B%22selectionType%22%3A%22registered%22%2C%22selectionMatch%22%3A%22awwyiss%22%7D%7D"
-
-	got, err := assembleSelectURL(testAPIURL, testSelection)
+	got, err := assembleSelectionURL(testAPIURL, testSelection)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 	if got != want {
 		t.Fatalf("got: %+v, want: %v", got, want)
+	}
+}
+
+func TestAssembleSelectionURLWhenMarshalingFails(t *testing.T) {
+	origJSONMarshal := jsonMarshal
+	jsonMarshal = func(_ interface{}) ([]byte, error) {
+		return nil, errors.New("test error")
+	}
+	defer func() { jsonMarshal = origJSONMarshal }()
+
+	got, err := assembleSelectionURL("", &Selection{})
+	if got != "" {
+		t.Errorf(`invalid return value; wanted: "", got: %v`, got)
+	}
+	if err == nil {
+		t.Error("invalid error return value; wanted error, got nil")
+	}
+}
+
+func TestAssembleSelectionRequest(t *testing.T) {
+	testAPIURL := "http://heylooksomethingelse/endpoint"
+	testSelection := &Selection{
+		SelectionType:  SelectionTypeRegistered,
+		SelectionMatch: "awwyiss",
+	}
+
+	got, err := assembleSelectionRequest(testAPIURL, testSelection)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if got.Method != http.MethodGet {
+		t.Errorf("invalid method on request; got: %q, want: %q", got.Method, http.MethodGet)
+	}
+	wantu, _ := assembleSelectionURL(testAPIURL, testSelection)
+	if gotu := got.URL.String(); gotu != wantu {
+		t.Errorf("invalid URL; got: %q, want: %q", gotu, wantu)
+	}
+	if goth := got.Header.Get("Content-Type"); goth != requestContentType {
+		t.Errorf("invalid Content-Type header; got: %q, want: %q", goth, requestContentType)
+	}
+}
+
+func TestAssembleSelectionRequestWhenNewRequestFails(t *testing.T) {
+	origHTTPNewRequest := httpNewRequest
+	httpNewRequest = func(_, _ string, _ io.Reader) (*http.Request, error) {
+		return nil, errors.New("test error")
+	}
+	defer func() { httpNewRequest = origHTTPNewRequest }()
+
+	got, err := assembleSelectionRequest("", &Selection{})
+	if got != nil {
+		t.Errorf("got non-nil request: %+v", got)
+	}
+	if err == nil {
+		t.Error("invalid error return value; wanted error, got nil")
+	}
+	if !strings.HasPrefix(err.Error(), "failed to create request:") {
+		t.Errorf(`invalid error return value; wanted "failed to create request:" prefix, got: %q`, err)
+	}
+}
+
+func TestValidateSelectionResponse(t *testing.T) {
+	for _, tt := range []struct {
+		res  *http.Response
+		want error
+	}{
+		{
+			res: &http.Response{
+				Status:     "Found",
+				StatusCode: http.StatusFound,
+			},
+			want: errors.New("non-ok status response from API: 302 Found"),
+		},
+		{
+			res: &http.Response{
+				Status:     "WTF Is This?",
+				StatusCode: 600,
+			},
+			want: errors.New("non-ok status response from API: 600 WTF Is This?"),
+		},
+		{
+			res: &http.Response{
+				Status:     "OK",
+				StatusCode: 200,
+			},
+		},
+		{
+			res: &http.Response{
+				Status:     "Created",
+				StatusCode: 201,
+			},
+		},
+	} {
+		if got := validateSelectionResponse(tt.res); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("invalid error response; got: %q, want: %q", got, tt.want)
+		}
 	}
 }
 
