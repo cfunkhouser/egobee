@@ -12,6 +12,13 @@ const (
 	requestContentType = "application/json; charset=utf-8"
 )
 
+// These are simple stubs which allow for easy overrides in testing without a
+// heavy mocks library.
+var (
+	httpNewRequest = http.NewRequest
+	jsonMarshal    = json.Marshal
+)
+
 // page is used for paging in some APIs.
 type page struct {
 	Page       int `json:"page"`
@@ -26,15 +33,37 @@ type summarySelection struct {
 	Selection Selection `json:"selection,omitempty"`
 }
 
-func assembleSelectURL(apiURL string, selection *Selection) (string, error) {
+func assembleSelectionURL(apiURL string, selection *Selection) (string, error) {
 	ss := &summarySelection{
 		Selection: *selection,
 	}
-	qb, err := json.Marshal(ss)
+	qb, err := jsonMarshal(ss)
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf(`%v?json=%v`, apiURL, url.QueryEscape(string(qb))), nil
+}
+
+func assembleSelectionRequest(url string, s *Selection) (*http.Request, error) {
+	u, err := assembleSelectionURL(url, s)
+	if err != nil {
+		return nil, err
+	}
+	r, err := httpNewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	r.Header.Add("Content-Type", requestContentType)
+	return r, nil
+}
+
+// validateSelectionResponse validates that a http.Response resulting from a
+// selection request is actually usable.
+func validateSelectionResponse(res *http.Response) error {
+	if (res.StatusCode / 100) != 2 {
+		return fmt.Errorf("non-ok status response from API: %v %v", res.StatusCode, res.Status)
+	}
+	return nil
 }
 
 // ThermostatSummary retrieves a list of thermostat configuration and state
@@ -43,26 +72,24 @@ func assembleSelectURL(apiURL string, selection *Selection) (string, error) {
 // data.
 // See https://www.ecobee.com/home/developer/api/documentation/v1/operations/get-thermostat-summary.shtml
 func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
-	url, err := assembleSelectURL(c.api.URL(thermostatSummaryURL), &Selection{
+	req, err := assembleSelectionRequest(c.api.URL(thermostatSummaryURL), &Selection{
 		SelectionType: SelectionTypeRegistered,
 		IncludeAlerts: true,
 	})
 	if err != nil {
 		return nil, err
 	}
-	r, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-	r.Header.Add("Content-Type", requestContentType)
-	res, err := c.Do(r)
+
+	res, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Do(): %v", err)
 	}
 	defer res.Body.Close()
-	if (res.StatusCode / 100) != 2 {
-		return nil, fmt.Errorf("non-ok status response from API: %v", res.Status)
+
+	if err := validateSelectionResponse(res); err != nil {
+		return nil, err
 	}
+
 	ts := &ThermostatSummary{}
 	if err := json.NewDecoder(res.Body).Decode(ts); err != nil {
 		return nil, err
@@ -82,28 +109,24 @@ type pagedThermostatResponse struct {
 
 // Thermostats returns all Thermostat objects which match selection.
 func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
-	url, err := assembleSelectURL(c.api.URL(thermostatURL), selection)
+	req, err := assembleSelectionRequest(c.api.URL(thermostatSummaryURL), selection)
 	if err != nil {
 		return nil, err
 	}
-	r, err := http.NewRequest(http.MethodGet, url, nil)
+
+	res, err := c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-	r.Header.Add("Content-Type", requestContentType)
-	res, err := c.Do(r)
-	if err != nil {
-		return nil, fmt.Errorf("failed to Do(): %v", err)
+		return nil, err
 	}
 	defer res.Body.Close()
+
+	if err := validateSelectionResponse(res); err != nil {
+		return nil, err
+	}
 
 	ptr := &pagedThermostatResponse{}
 	if err := json.NewDecoder(res.Body).Decode(ptr); err != nil {
 		return nil, fmt.Errorf("failed to decode response from API: %v", err)
-	}
-
-	if (res.StatusCode / 100) != 2 {
-		return nil, fmt.Errorf("non-ok status response from API: %v", ptr.Status.Message)
 	}
 
 	if ptr.Page.Page != ptr.Page.TotalPages {
