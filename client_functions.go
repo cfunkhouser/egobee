@@ -2,8 +2,9 @@ package egobee
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -17,6 +18,16 @@ const (
 var (
 	httpNewRequest = http.NewRequest
 	jsonMarshal    = json.Marshal
+
+	errPagingUnimplemented = errors.New("multi-page responses unimplemented")
+
+	// jsonDecode wraps the usual JSON decode workflow to make testing easier.
+	jsonDecode = func(from io.Reader, to interface{}) error {
+		if err := json.NewDecoder(from).Decode(to); err != nil {
+			return fmt.Errorf("failed to decode JSON: %v", err)
+		}
+		return nil
+	}
 )
 
 // page is used for paging in some APIs.
@@ -91,7 +102,7 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 	}
 
 	ts := &ThermostatSummary{}
-	if err := json.NewDecoder(res.Body).Decode(ts); err != nil {
+	if err := jsonDecode(res.Body, ts); err != nil {
 		return nil, err
 	}
 	return ts, nil
@@ -125,13 +136,14 @@ func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
 	}
 
 	ptr := &pagedThermostatResponse{}
-	if err := json.NewDecoder(res.Body).Decode(ptr); err != nil {
-		return nil, fmt.Errorf("failed to decode response from API: %v", err)
+
+	if err := jsonDecode(res.Body, ptr); err != nil {
+		return nil, err
 	}
 
 	if ptr.Page.Page != ptr.Page.TotalPages {
 		// TODO(cfunkhouser): Handle paged responses.
-		log.Printf("WARNING: Skipped some paged responses!")
+		return nil, errPagingUnimplemented
 	}
 	return ptr.Thermostats, nil
 }
