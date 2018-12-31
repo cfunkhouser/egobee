@@ -222,8 +222,8 @@ func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
 	if got != nil {
 		t.Errorf("got unexpected return value; got: %+v, want: nil", got)
 	}
-	if err.Error() != "failed to decode response from API: test error" {
-		t.Errorf(`got unexpected error value; got: %v, want: ""failed to decode response from API: test error"`, err)
+	if err.Error() != "test error" {
+		t.Errorf(`got unexpected error value; got: %v, want: "test error"`, err)
 	}
 }
 
@@ -339,7 +339,7 @@ func TestClientThermostatsJSONDecodeError(t *testing.T) {
 	if got != nil {
 		t.Errorf("got unexpected return value; got: %+v, want: nil", got)
 	}
-	if err.Error() != "failed to decode response from API: test error" {
-		t.Errorf(`got unexpected error value; got: %v, want: ""failed to decode response from API: test error"`, err)
+	if err.Error() != "test error" {
+		t.Errorf(`got unexpected error value; got: %v, want: "test error"`, err)
 	}
 }

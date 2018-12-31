@@ -103,7 +103,7 @@ func (c *Client) ThermostatSummary() (*ThermostatSummary, error) {
 
 	ts := &ThermostatSummary{}
 	if err := jsonDecode(res.Body, ts); err != nil {
-		return nil, fmt.Errorf("failed to decode response from API: %v", err)
+		return nil, err
 	}
 	return ts, nil
 }
@@ -138,7 +138,7 @@ func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
 	ptr := &pagedThermostatResponse{}
 
 	if err := jsonDecode(res.Body, ptr); err != nil {
-		return nil, fmt.Errorf("failed to decode response from API: %v", err)
+		return nil, err
 	}
 
 	if ptr.Page.Page != ptr.Page.TotalPages {
