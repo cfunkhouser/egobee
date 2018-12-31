@@ -123,7 +123,22 @@ func TestValidateSelectionResponse(t *testing.T) {
 	}
 }
 
-func selectionRequestValidatingTestHandler(t *testing.T, testPayload string) http.HandlerFunc {
+type testServerOpts struct {
+	payload    string
+	statusCode int
+}
+
+var defaultOpts testServerOpts
+
+func clientAndServerForTest(t *testing.T, opts testServerOpts) (*Client, *httptest.Server) {
+	s := httptest.NewServer(selectionRequestValidatingTestHandler(t, opts))
+	c := &Client{
+		api: apiBaseURL(s.URL),
+	}
+	return c, s
+}
+
+func selectionRequestValidatingTestHandler(t *testing.T, opts testServerOpts) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Content-Type"); got != requestContentType {
 			t.Errorf("invalid Content-Type header; got: %q, want: %q", got, requestContentType)
@@ -132,35 +147,34 @@ func selectionRequestValidatingTestHandler(t *testing.T, testPayload string) htt
 			t.Errorf("invalid API Path; got: %q, want: %q", got, thermostatSummaryURL)
 		}
 		w.Header().Set("Content-Type", requestContentType)
-		w.WriteHeader(http.StatusOK)
-		if testPayload != "" {
-			w.Write([]byte(testPayload))
+		statusCode := http.StatusOK
+		if opts.statusCode != 0 {
+			statusCode = opts.statusCode
+		}
+		w.WriteHeader(statusCode)
+		if opts.payload != "" {
+			w.Write([]byte(opts.payload))
 		}
 	}
 }
 
-func clientAndServerForTest(t *testing.T, testPayload string) (*Client, *httptest.Server) {
-	s := httptest.NewServer(selectionRequestValidatingTestHandler(t, testPayload))
-	c := &Client{
-		api: apiBaseURL(s.URL),
-	}
-	return c, s
-}
-
 func TestClientThermostatSummary(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		response string
-		want     *ThermostatSummary
+		name    string
+		opts    testServerOpts
+		want    *ThermostatSummary
+		wantErr string
 	}{
 		{
 			name: "OK response",
-			response: `{
+			opts: testServerOpts{
+				payload: `{
 		"revisionList": ["revision1","revision2"],
 		"thermostatCount": 2,
 		"statusList": ["status1","status2"],
 		"status": {"code": 200, "message": "Ok"}
 	}`,
+			},
 			want: &ThermostatSummary{
 				RevisionList:    []string{"revision1", "revision2"},
 				ThermostatCount: 2,
@@ -171,11 +185,21 @@ func TestClientThermostatSummary(t *testing.T) {
 				}{200, "Ok"},
 			},
 		},
+		{
+			name: "Not-ok (503) response",
+			opts: testServerOpts{
+				statusCode: 503,
+			},
+			wantErr: "non-ok status response from API: 503 Internal Server Error",
+		},
 	} {
-		client, server := clientAndServerForTest(t, tt.response)
+		client, server := clientAndServerForTest(t, tt.opts)
 		got, err := client.ThermostatSummary()
-		if err != nil {
-			t.Fatalf("case %q: got unexpected error: %v", tt.name, err)
+		if tt.wantErr != "" && err == nil {
+			t.Errorf("case %q: didn't get expected error; want: %q", tt.name, tt.wantErr)
+		}
+		if tt.wantErr == "" && err != nil {
+			t.Errorf("case %q: got unexpected error: %v", tt.name, err)
 		}
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("case %q: return value check failed;\ngot: %#v\nwant: %#v", tt.name, got, tt.want)
@@ -191,7 +215,7 @@ func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
 	}
 	defer func() { jsonDecode = origJSONDecode }()
 
-	client, server := clientAndServerForTest(t, "")
+	client, server := clientAndServerForTest(t, defaultOpts)
 	defer server.Close()
 	got, err := client.ThermostatSummary()
 
@@ -205,13 +229,15 @@ func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
 
 func TestClientThermostats(t *testing.T) {
 	for _, tt := range []struct {
-		name     string
-		response string
-		want     []*Thermostat
+		name    string
+		opts    testServerOpts
+		want    []*Thermostat
+		wantErr string
 	}{
 		{
 			name: "OK response with thermostats",
-			response: `{
+			opts: testServerOpts{
+				payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -224,6 +250,7 @@ func TestClientThermostats(t *testing.T) {
 		],
 		"status": { "code": 200, "message": "OK" }
 	}`,
+			},
 			want: []*Thermostat{
 				&Thermostat{Name: "thermostat1"},
 				&Thermostat{Name: "thermostat2"},
@@ -231,13 +258,15 @@ func TestClientThermostats(t *testing.T) {
 		},
 		{
 			name: "response with thermostats and no page info",
-			response: `{
+			opts: testServerOpts{
+				payload: `{
 		"thermostatList": [
 			{ "name": "thermostat1" },
 			{ "name": "thermostat2" }
 		],
 		"status": { "code": 200, "message": "OK" }
 	}`,
+			},
 			want: []*Thermostat{
 				&Thermostat{Name: "thermostat1"},
 				&Thermostat{Name: "thermostat2"},
@@ -245,7 +274,8 @@ func TestClientThermostats(t *testing.T) {
 		},
 		{
 			name: "OK response with empty thermostat list",
-			response: `{
+			opts: testServerOpts{
+				payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -255,11 +285,13 @@ func TestClientThermostats(t *testing.T) {
 		"thermostatList": [],
 		"status": { "code": 200, "message": "OK" }
 	}`,
+			},
 			want: []*Thermostat{},
 		},
 		{
 			name: "OK response with no thermostat list",
-			response: `{
+			opts: testServerOpts{
+				payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -268,12 +300,23 @@ func TestClientThermostats(t *testing.T) {
 		},
 		"status": { "code": 200, "message": "OK" }
 	}`,
+			},
+		},
+		{
+			name: "not-ok (503) response",
+			opts: testServerOpts{
+				statusCode: 503,
+			},
+			wantErr: "non-ok status response from API: 503 Internal Server Error",
 		},
 	} {
-		client, server := clientAndServerForTest(t, tt.response)
+		client, server := clientAndServerForTest(t, tt.opts)
 		got, err := client.Thermostats(&Selection{})
-		if err != nil {
-			t.Fatalf("case %q: got unexpected error: %v", tt.name, err)
+		if tt.wantErr != "" && err == nil {
+			t.Errorf("case %q: didn't get expected error; want: %q", tt.name, tt.wantErr)
+		}
+		if tt.wantErr == "" && err != nil {
+			t.Errorf("case %q: got unexpected error: %v", tt.name, err)
 		}
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("case %q: return value check failed;\ngot: %#v\nwant: %#v", tt.name, got, tt.want)
@@ -289,7 +332,7 @@ func TestClientThermostatsJSONDecodeError(t *testing.T) {
 	}
 	defer func() { jsonDecode = origJSONDecode }()
 
-	client, server := clientAndServerForTest(t, "")
+	client, server := clientAndServerForTest(t, defaultOpts)
 	defer server.Close()
 	got, err := client.Thermostats(&Selection{})
 
