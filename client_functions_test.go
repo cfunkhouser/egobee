@@ -148,34 +148,58 @@ func clientAndServerForTest(t *testing.T, testPayload string) (*Client, *httptes
 }
 
 func TestClientThermostatSummary(t *testing.T) {
-	testValidResponse := `{
+	for _, tt := range []struct {
+		name     string
+		response string
+		want     *ThermostatSummary
+	}{
+		{
+			name: "OK response",
+			response: `{
 		"revisionList": ["revision1","revision2"],
 		"thermostatCount": 2,
 		"statusList": ["status1","status2"],
 		"status": {"code": 200, "message": "Ok"}
-	}`
-
-	client, server := clientAndServerForTest(t, testValidResponse)
-	defer server.Close()
-
-	want := &ThermostatSummary{
-		RevisionList:    []string{"revision1", "revision2"},
-		ThermostatCount: 2,
-		StatusList:      []string{"status1", "status2"},
-		Status: struct {
-			Code    int    `json:"code,omitempty"`
-			Message string `json:"message,omitempty"`
-		}{
-			200,
-			"Ok",
+	}`,
+			want: &ThermostatSummary{
+				RevisionList:    []string{"revision1", "revision2"},
+				ThermostatCount: 2,
+				StatusList:      []string{"status1", "status2"},
+				Status: struct {
+					Code    int    `json:"code,omitempty"`
+					Message string `json:"message,omitempty"`
+				}{200, "Ok"},
+			},
 		},
+	} {
+		client, server := clientAndServerForTest(t, tt.response)
+		got, err := client.ThermostatSummary()
+		if err != nil {
+			t.Fatalf("case %q: got unexpected error: %v", tt.name, err)
+		}
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("case %q: return value check failed;\ngot: %#v\nwant: %#v", tt.name, got, tt.want)
+		}
+		server.Close()
 	}
+}
+
+func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
+	origJSONDecode := jsonDecode
+	jsonDecode = func(io.Reader, interface{}) error {
+		return errors.New("test error")
+	}
+	defer func() { jsonDecode = origJSONDecode }()
+
+	client, server := clientAndServerForTest(t, "")
+	defer server.Close()
 	got, err := client.ThermostatSummary()
-	if err != nil {
-		t.Fatalf("got unexpected error: %v", err)
+
+	if got != nil {
+		t.Errorf("got unexpected return value; got: %+v, want: nil", got)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("return value check failed;\ngot: %+v\nwant: %+v", got, want)
+	if err.Error() != "failed to decode response from API: test error" {
+		t.Errorf(`got unexpected error value; got: %v, want: ""failed to decode response from API: test error"`, err)
 	}
 }
 
@@ -255,5 +279,24 @@ func TestClientThermostats(t *testing.T) {
 			t.Errorf("case %q: return value check failed;\ngot: %#v\nwant: %#v", tt.name, got, tt.want)
 		}
 		server.Close()
+	}
+}
+
+func TestClientThermostatsJSONDecodeError(t *testing.T) {
+	origJSONDecode := jsonDecode
+	jsonDecode = func(io.Reader, interface{}) error {
+		return errors.New("test error")
+	}
+	defer func() { jsonDecode = origJSONDecode }()
+
+	client, server := clientAndServerForTest(t, "")
+	defer server.Close()
+	got, err := client.Thermostats(&Selection{})
+
+	if got != nil {
+		t.Errorf("got unexpected return value; got: %+v, want: nil", got)
+	}
+	if err.Error() != "failed to decode response from API: test error" {
+		t.Errorf(`got unexpected error value; got: %v, want: ""failed to decode response from API: test error"`, err)
 	}
 }
