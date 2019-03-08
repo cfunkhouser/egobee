@@ -105,6 +105,35 @@ func (t *authorizingTransport) reauth() error {
 	return nil
 }
 
+type Options struct {
+	APIHost string
+}
+
+func (o *Options) apiHost(defaultHost ...apiBaseURL) apiBaseURL {
+	dh := ecobeeAPIHost
+	if l := len(defaultHost); l > 0 {
+		dh = defaultHost[l-1]
+	}
+	if o == nil || o.APIHost == "" {
+		return dh
+	}
+	return apiBaseURL(o.APIHost)
+}
+
+func accumulateOptions(opts []*Options) *Options {
+	if len(opts) == 0 {
+		return nil
+	}
+	if len(opts) == 1 {
+		return opts[0]
+	}
+	r := &Options{}
+	for _, opt := range opts {
+		r.APIHost = string(opt.apiHost(r.apiHost()))
+	}
+	return r
+}
+
 // Client for the ecobee API.
 type Client struct {
 	api apiBaseURL
@@ -112,9 +141,10 @@ type Client struct {
 }
 
 // New egobee client.
-func New(appID string, ts TokenStorer) *Client {
+func New(appID string, ts TokenStorer, opts ...*Options) *Client {
+	ao := accumulateOptions(opts)
 	return &Client{
-		api: ecobeeAPIHost,
+		api: ao.apiHost(),
 		Client: http.Client{
 			Transport: &authorizingTransport{
 				auth:      ts,
