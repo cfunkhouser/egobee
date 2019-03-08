@@ -105,7 +105,9 @@ func (t *authorizingTransport) reauth() error {
 	return nil
 }
 
+// Options to New.
 type Options struct {
+	// APIHost for Ecobee API requests. Defaults to https://api.ecobee.com.
 	APIHost string
 }
 
