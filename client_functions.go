@@ -120,7 +120,7 @@ type pagedThermostatResponse struct {
 
 // Thermostats returns all Thermostat objects which match selection.
 func (c *Client) Thermostats(selection *Selection) ([]*Thermostat, error) {
-	req, err := assembleSelectionRequest(c.api.URL(thermostatSummaryURL), selection)
+	req, err := assembleSelectionRequest(c.api.URL(thermostatURL), selection)
 	if err != nil {
 		return nil, err
 	}

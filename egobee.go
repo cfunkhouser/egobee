@@ -5,7 +5,10 @@ package egobee
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/http/httputil"
 	"time"
 )
 
@@ -105,35 +108,53 @@ func (t *authorizingTransport) reauth() error {
 	return nil
 }
 
+func simpleRequestID() string {
+	return fmt.Sprintf("req@%v", time.Now().UnixNano())
+}
+
+// loggingTransport is a RoundTripper which wraps a RoundTripper and logs every
+// HTTP request and response to a Logger.
+type loggingTransport struct {
+	l         *log.Logger
+	transport http.RoundTripper
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	id := simpleRequestID()
+	if rb, err := httputil.DumpRequest(req, true); err == nil {
+		t.l.Printf("Outgoing Request %v:\n%+v\n<< END %v", id, string(rb), id)
+	}
+	r, err := t.transport.RoundTrip(req)
+	if err != nil {
+		t.l.Printf("Error %v: %v", id, err)
+	} else if rb, err := httputil.DumpResponse(r, true); err == nil {
+		t.l.Printf("Incoming Response to %v:\n%+v\n<< END resp %v", id, string(rb), id)
+	}
+	return r, err
+}
+
 // Options to New.
 type Options struct {
 	// APIHost for Ecobee API requests. Defaults to https://api.ecobee.com.
 	APIHost string
+	// Log all requests to LogTo if true.
+	Log bool
+	// LogTo gets all requests and responses to this Writer verbosely.
+	LogTo io.Writer
 }
 
-func (o *Options) apiHost(defaultHost ...apiBaseURL) apiBaseURL {
-	dh := ecobeeAPIHost
-	if l := len(defaultHost); l > 0 {
-		dh = defaultHost[l-1]
-	}
+func (o *Options) apiHost() apiBaseURL {
 	if o == nil || o.APIHost == "" {
-		return dh
+		return ecobeeAPIHost
 	}
 	return apiBaseURL(o.APIHost)
 }
 
-func accumulateOptions(opts []*Options) *Options {
-	if len(opts) == 0 {
-		return nil
+func (o *Options) log() (io.Writer, bool) {
+	if o == nil {
+		return nil, false
 	}
-	if len(opts) == 1 {
-		return opts[0]
-	}
-	r := &Options{}
-	for _, opt := range opts {
-		r.APIHost = string(opt.apiHost(r.apiHost()))
-	}
-	return r
+	return o.LogTo, o.Log
 }
 
 // Client for the ecobee API.
@@ -144,16 +165,28 @@ type Client struct {
 
 // New egobee client.
 func New(appID string, ts TokenStorer, opts ...*Options) *Client {
-	ao := accumulateOptions(opts)
+	// Someday I'll realize it would have been easier just to have a second New
+	// function instead of doing this variadic bullshit.
+	var opt *Options
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	var trans http.RoundTripper = &authorizingTransport{
+		auth:      ts,
+		transport: http.DefaultTransport,
+		appID:     appID,
+		api:       opt.apiHost(),
+	}
+	if w, doLog := opt.log(); doLog {
+		trans = &loggingTransport{
+			l:         log.New(w, "", log.LstdFlags),
+			transport: trans,
+		}
+	}
 	return &Client{
-		api: ao.apiHost(),
+		api: opt.apiHost(),
 		Client: http.Client{
-			Transport: &authorizingTransport{
-				auth:      ts,
-				transport: http.DefaultTransport,
-				appID:     appID,
-				api:       ecobeeAPIHost,
-			},
+			Transport: trans,
 		},
 	}
 }

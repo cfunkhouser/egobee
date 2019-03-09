@@ -3,7 +3,6 @@ package egobee
 import (
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -141,101 +140,26 @@ func TestAuthorizingTransport_ShouldReauth(t *testing.T) {
 func TestOptions_APIHost(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		args []apiBaseURL
 		opt  *Options
 		want apiBaseURL
 	}{
 		{
-			name: "nil opts, no args",
+			name: "nil opts",
 			want: ecobeeAPIHost,
 		},
 		{
-			name: "nil opts, one arg",
-			args: []apiBaseURL{"https://api.foo.bar"},
-			want: apiBaseURL("https://api.foo.bar"),
-		},
-		{
-			name: "nil opts, multiple args",
-			args: []apiBaseURL{"https://api.foo.bar", "https://api.example.com", "https://bar.foo.bar"},
-			want: apiBaseURL("https://bar.foo.bar"),
-		},
-		{
-			name: "empty APIHost, no args",
+			name: "empty APIHost",
 			opt:  &Options{},
 			want: ecobeeAPIHost,
 		},
 		{
-			name: "empty APIHost, one arg",
-			opt:  &Options{},
-			args: []apiBaseURL{"https://api.foo.bar"},
-			want: apiBaseURL("https://api.foo.bar"),
-		},
-		{
-			name: "empty APIHost, multiple args",
-			opt:  &Options{},
-			args: []apiBaseURL{"https://api.foo.bar", "https://api.example.com", "https://bar.foo.bar"},
-			want: apiBaseURL("https://bar.foo.bar"),
-		},
-		{
-			name: "set APIHost, no args",
+			name: "set APIHost",
 			opt:  &Options{APIHost: "http://api.something.lol"},
-			want: apiBaseURL("http://api.something.lol"),
-		},
-		{
-			name: "set APIHost, one arg",
-			opt:  &Options{APIHost: "http://api.something.lol"},
-			args: []apiBaseURL{"https://api.foo.bar"},
-			want: apiBaseURL("http://api.something.lol"),
-		},
-		{
-			name: "set APIHost, multiple args",
-			opt:  &Options{APIHost: "http://api.something.lol"},
-			args: []apiBaseURL{"https://api.foo.bar", "https://api.example.com", "https://bar.foo.bar"},
 			want: apiBaseURL("http://api.something.lol"),
 		},
 	} {
-		if got := tt.opt.apiHost(tt.args...); got != tt.want {
+		if got := tt.opt.apiHost(); got != tt.want {
 			t.Errorf("%v: apiHost returned incorrect value; got: %v, want: %v", tt.name, got, tt.want)
-		}
-	}
-}
-
-func TestAccumulateOptions(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		opts []*Options
-		want *Options
-	}{
-		{
-			name: "empty opts list",
-			// Empty options list means nil *Options. Set neither here.
-		},
-		{
-			name: "single opts entry",
-			opts: []*Options{&Options{APIHost: "https://api.foo.bar"}},
-			want: &Options{APIHost: "https://api.foo.bar"},
-		},
-		{
-			name: "multiple opts entries with non-conflicting APIHost",
-			opts: []*Options{
-				&Options{APIHost: "https://api.foo.bar"},
-				nil,
-			},
-			want: &Options{APIHost: "https://api.foo.bar"},
-		},
-		{
-			name: "multiple opts entries with conflicting APIHost",
-			opts: []*Options{
-				&Options{APIHost: "https://api.foo.bar"},
-				&Options{APIHost: "https://api.example.com"},
-				&Options{APIHost: "https://bar.foo.bar"},
-			},
-			want: &Options{APIHost: "https://bar.foo.bar"},
-		},
-	} {
-		got := accumulateOptions(tt.opts)
-		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("%v: accumulated options don't match;\n\tgot: %+v\n\t%+v", tt.name, got, tt.want)
 		}
 	}
 }
