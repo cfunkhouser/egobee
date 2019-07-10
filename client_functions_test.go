@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/imdario/mergo"
 )
 
 func TestAssembleSelectionURL(t *testing.T) {
@@ -124,13 +126,16 @@ func TestValidateSelectionResponse(t *testing.T) {
 }
 
 type testServerOpts struct {
-	payload    string
-	statusCode int
+	Payload    string
+	StatusCode int
+
+	APIPath string
 }
 
 var defaultOpts testServerOpts
 
 func clientAndServerForTest(t *testing.T, opts testServerOpts) (*Client, *httptest.Server) {
+	t.Helper()
 	s := httptest.NewServer(selectionRequestValidatingTestHandler(t, opts))
 	c := &Client{
 		api: apiBaseURL(s.URL),
@@ -139,26 +144,30 @@ func clientAndServerForTest(t *testing.T, opts testServerOpts) (*Client, *httpte
 }
 
 func selectionRequestValidatingTestHandler(t *testing.T, opts testServerOpts) http.HandlerFunc {
+	t.Helper()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Content-Type"); got != requestContentType {
 			t.Errorf("invalid Content-Type header; got: %q, want: %q", got, requestContentType)
 		}
-		if got := r.URL.Path; got != thermostatSummaryURL {
-			t.Errorf("invalid API Path; got: %q, want: %q", got, thermostatSummaryURL)
+		if got := r.URL.Path; got != opts.APIPath {
+			t.Errorf("invalid API Path; got: %q, want: %q", got, opts.APIPath)
 		}
 		w.Header().Set("Content-Type", requestContentType)
 		statusCode := http.StatusOK
-		if opts.statusCode != 0 {
-			statusCode = opts.statusCode
+		if opts.StatusCode != 0 {
+			statusCode = opts.StatusCode
 		}
 		w.WriteHeader(statusCode)
-		if opts.payload != "" {
-			w.Write([]byte(opts.payload))
+		if opts.Payload != "" {
+			w.Write([]byte(opts.Payload))
 		}
 	}
 }
 
 func TestClientThermostatSummary(t *testing.T) {
+	baseOpts := testServerOpts{
+		APIPath: "/1/thermostatSummary",
+	}
 	for _, tt := range []struct {
 		name    string
 		opts    testServerOpts
@@ -168,7 +177,7 @@ func TestClientThermostatSummary(t *testing.T) {
 		{
 			name: "OK response",
 			opts: testServerOpts{
-				payload: `{
+				Payload: `{
 		"revisionList": ["revision1","revision2"],
 		"thermostatCount": 2,
 		"statusList": ["status1","status2"],
@@ -188,12 +197,16 @@ func TestClientThermostatSummary(t *testing.T) {
 		{
 			name: "Not-ok (503) response",
 			opts: testServerOpts{
-				statusCode: 503,
+				StatusCode: 503,
 			},
 			wantErr: "non-ok status response from API: 503 Internal Server Error",
 		},
 	} {
-		client, server := clientAndServerForTest(t, tt.opts)
+		opts := baseOpts
+		if err := mergo.Merge(&opts, tt.opts, mergo.WithOverride); err != nil {
+			t.Fatalf("failed setting up opts for test: %v", err)
+		}
+		client, server := clientAndServerForTest(t, opts)
 		got, err := client.ThermostatSummary()
 		if tt.wantErr != "" && err == nil {
 			t.Errorf("case %q: didn't get expected error; want: %q", tt.name, tt.wantErr)
@@ -215,7 +228,7 @@ func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
 	}
 	defer func() { jsonDecode = origJSONDecode }()
 
-	client, server := clientAndServerForTest(t, defaultOpts)
+	client, server := clientAndServerForTest(t, testServerOpts{APIPath: "/1/thermostatSummary"})
 	defer server.Close()
 	got, err := client.ThermostatSummary()
 
@@ -228,6 +241,11 @@ func TestClientThermostatSummaryJSONDecodeError(t *testing.T) {
 }
 
 func TestClientThermostats(t *testing.T) {
+
+	baseOpts := testServerOpts{
+		APIPath: "/1/thermostat",
+	}
+
 	for _, tt := range []struct {
 		name    string
 		opts    testServerOpts
@@ -237,7 +255,7 @@ func TestClientThermostats(t *testing.T) {
 		{
 			name: "OK response with thermostats",
 			opts: testServerOpts{
-				payload: `{
+				Payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -259,7 +277,7 @@ func TestClientThermostats(t *testing.T) {
 		{
 			name: "response with thermostats and no page info",
 			opts: testServerOpts{
-				payload: `{
+				Payload: `{
 		"thermostatList": [
 			{ "name": "thermostat1" },
 			{ "name": "thermostat2" }
@@ -275,7 +293,7 @@ func TestClientThermostats(t *testing.T) {
 		{
 			name: "OK response with empty thermostat list",
 			opts: testServerOpts{
-				payload: `{
+				Payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -291,7 +309,7 @@ func TestClientThermostats(t *testing.T) {
 		{
 			name: "OK response with no thermostat list",
 			opts: testServerOpts{
-				payload: `{
+				Payload: `{
 		"page": {
 			"page": 1,
 			"totalPages": 1,
@@ -305,12 +323,16 @@ func TestClientThermostats(t *testing.T) {
 		{
 			name: "not-ok (503) response",
 			opts: testServerOpts{
-				statusCode: 503,
+				StatusCode: 503,
 			},
 			wantErr: "non-ok status response from API: 503 Internal Server Error",
 		},
 	} {
-		client, server := clientAndServerForTest(t, tt.opts)
+		opts := baseOpts
+		if err := mergo.Merge(&opts, tt.opts, mergo.WithOverride); err != nil {
+			t.Fatalf("failed setting up opts for test: %v", err)
+		}
+		client, server := clientAndServerForTest(t, opts)
 		got, err := client.Thermostats(&Selection{})
 		if tt.wantErr != "" && err == nil {
 			t.Errorf("case %q: didn't get expected error; want: %q", tt.name, tt.wantErr)
@@ -332,7 +354,7 @@ func TestClientThermostatsJSONDecodeError(t *testing.T) {
 	}
 	defer func() { jsonDecode = origJSONDecode }()
 
-	client, server := clientAndServerForTest(t, defaultOpts)
+	client, server := clientAndServerForTest(t, testServerOpts{APIPath: "/1/thermostat"})
 	defer server.Close()
 	got, err := client.Thermostats(&Selection{})
 
