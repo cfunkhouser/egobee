@@ -160,7 +160,7 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 }
 
 func TestNewPersistentTokenStore(t *testing.T) {
-	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
+	testStorePath := "/tmp/testStore"
 	tokenRefreshResponse := &TokenRefreshResponse{
 		AccessToken:  "anAccessToken",
 		TokenType:    "Bearer",
@@ -187,7 +187,7 @@ func TestNewPersistentTokenStore(t *testing.T) {
 }
 
 func TestNewPersistentTokenStoreFromDisk(t *testing.T) {
-	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
+	testStorePath := "/tmp/testStore"
 	testFileData := []byte(`{"accessToken":"anAccessToken","refreshToken":"aRefreshToken","validUntil":"2015-02-23T14:51:00.000000000-05:00"}`)
 	err := ioutil.WriteFile(testStorePath, testFileData, 0640)
 	tokenStore, err := NewPersistentTokenFromDisk(testStorePath)
@@ -214,7 +214,7 @@ func TestPersistentStoreUpdateLeavesOnlyASingleEntryInFile(t *testing.T) {
 	now = func() time.Time { return ttime }
 	defer func() { now = origNow }()
 
-	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
+	testStorePath := "/tmp/testStore"
 	tokenRefreshResponse := &TokenRefreshResponse{
 		AccessToken:  "anAccessToken",
 		TokenType:    "Bearer",
