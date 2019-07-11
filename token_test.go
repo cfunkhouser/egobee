@@ -160,7 +160,7 @@ func TestAuthorizationErrorResponse_Parse(t *testing.T) {
 }
 
 func TestNewPersistentTokenStore(t *testing.T) {
-	testStorePath := "/tmp/tokenStore"
+	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
 	tokenRefreshResponse := &TokenRefreshResponse{
 		AccessToken:  "anAccessToken",
 		TokenType:    "Bearer",
@@ -187,7 +187,7 @@ func TestNewPersistentTokenStore(t *testing.T) {
 }
 
 func TestNewPersistentTokenStoreFromDisk(t *testing.T) {
-	testStorePath := "/tmp/tokenStore"
+	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
 	testFileData := []byte(`{"accessToken":"anAccessToken","refreshToken":"aRefreshToken","validUntil":"2015-02-23T14:51:00.000000000-05:00"}`)
 	err := ioutil.WriteFile(testStorePath, testFileData, 0640)
 	tokenStore, err := NewPersistentTokenFromDisk(testStorePath)
@@ -203,4 +203,58 @@ func TestNewPersistentTokenStoreFromDisk(t *testing.T) {
 	if err := os.Remove(testStorePath); err != nil {
 		t.Fatalf("Failed to remove temporary file: %v", err)
 	}
+}
+
+func TestPersistentStoreUpdateLeavesOnlyASingleEntryInFile(t *testing.T) {
+	ttime, err := time.Parse(time.RFC3339, "2015-02-23T14:51:00-04:00")
+	if err != nil {
+		t.Fatalf("Failed setting up test prerequisite: %v", err)
+	}
+	origNow := now
+	now = func() time.Time { return ttime }
+	defer func() { now = origNow }()
+
+	testStorePath := "C:\\Users\\Christian Funkhouser\\AppData\\Local\\tempStore"
+	tokenRefreshResponse := &TokenRefreshResponse{
+		AccessToken:  "anAccessToken",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "aRefreshToken",
+		Scope:        ScopeSmartWrite,
+	}
+	tokenStore, err := NewPersistentTokenStore(tokenRefreshResponse, testStorePath)
+	if err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+	if _, err := os.Stat(testStorePath); err != nil {
+		t.Errorf("Persistent file does not exist: %v", err)
+	}
+
+	// Now "refresh" the token store.
+	updateRefreshResponse := &TokenRefreshResponse{
+		AccessToken:  "anotherAccessToken",
+		TokenType:    "Bearer",
+		ExpiresIn:    TokenDuration{Duration: time.Second * 3599},
+		RefreshToken: "aRefreshToken",
+		Scope:        ScopeSmartWrite,
+	}
+	if err := tokenStore.Update(updateRefreshResponse); err != nil {
+		t.Errorf("got unexpected error: %v", err)
+	}
+
+	b, err := ioutil.ReadFile(testStorePath)
+	if err != nil {
+		t.Errorf("Failed to read %q", testStorePath)
+	}
+
+	want := `{"accessToken":"anotherAccessToken","refreshToken":"aRefreshToken","validUntil":"2015-02-23T15:50:44-04:00"}
+`
+	if got := string(b); want != got {
+		t.Errorf("incorrect store file contents; got: %q, want: %q", got, want)
+	}
+
+	if err := os.Remove(testStorePath); err != nil {
+		t.Fatalf("Failed to remove temporary file: %v", err)
+	}
+
 }
